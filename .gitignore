@@ -1,6 +1,21 @@
 # Ignore data directory
 /data/
 
+# Ignore all data files in the data_foundation_project
+/data_foundation_project/data/raw/
+/data_foundation_project/data/processed/
+
+# Ignore shapefile and related large geospatial files everywhere
+*.shp
+*.dbf
+*.shx
+*.prj
+*.cpg
+*.qpj
+*.sbn
+*.sbx
+*.shp.xml
+
 # Python
 __pycache__/
 *.py[cod]
