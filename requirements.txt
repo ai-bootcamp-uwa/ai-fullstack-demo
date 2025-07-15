@@ -1,0 +1,6 @@
+geopandas
+fiona
+shapely
+pyproj
+pandas
+jupyterlab
