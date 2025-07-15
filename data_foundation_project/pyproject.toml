@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "data_foundation_project"
+version = "0.1.0"
+description = "A data foundation project for geospatial exploration reports"
+authors = [
+    { name = "Your Name" }
+]
+dependencies = [
+    "geopandas",
+    "fiona",
+    "shapely",
+    "pyproj",
+    "pandas",
+    "fastapi",
+    "uvicorn",
+    "jupyterlab"
+]
+requires-python = ">=3.8"
