@@ -5,17 +5,22 @@ Get the AI Full-Stack Geological Data Pipeline running in **under 10 minutes**.
 ## ⚡ Prerequisites (2 minutes)
 
 - ✅ Python 3.8+
+- ✅ Virtual environment support (venv module)
 - ✅ Azure OpenAI account with API keys ([Get one here](https://azure.microsoft.com/en-us/products/ai-services/openai-service))
 - ✅ Git and terminal/command line
 
 ## 🏃‍♂️ Fast Setup (5 minutes)
 
-### 1. Clone and Install
+### 1. Clone and Setup Environment
 
 ```bash
 # Clone the repository
 git clone <repository-url>
 cd ai-fullstack-demo-clean
+
+# Create and activate virtual environment
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 
 # Install Module 1 (Data Foundation)
 pip install -e ./data_foundation_project
@@ -59,6 +64,9 @@ nano .env  # or use your preferred editor
 ### Terminal 1: Start Module 1 (Data Foundation)
 
 ```bash
+# Activate virtual environment
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
 cd data_foundation_project
 uvicorn src.api.main:app --port 8000
 ```
@@ -68,6 +76,9 @@ uvicorn src.api.main:app --port 8000
 ### Terminal 2: Start Module 2 (Cortex Engine)
 
 ```bash
+# Activate virtual environment
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
 cd cortex_engine
 uvicorn src.main:app --port 3002
 ```
@@ -88,6 +99,9 @@ curl http://localhost:3002/health               # Module 2: AI
 
 ```bash
 # Complete AI pipeline test (cost-optimized: <$0.01)
+# Activate virtual environment
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
 cd cortex_engine
 python scripts/execute_full_pipeline.py
 ```
@@ -180,7 +194,7 @@ Once running, monitor your system:
 ### Explore the System
 
 - **View API Documentation**: http://localhost:3002/docs
-- **Run More Tests**: `cd cortex_engine && python tests/test_execution.py`
+- **Run More Tests**: `source .venv/bin/activate && cd cortex_engine && python tests/test_execution.py`
 - **Monitor Performance**: Check the pipeline execution metrics
 
 ### Develop Further
