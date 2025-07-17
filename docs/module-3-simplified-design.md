@@ -49,26 +49,47 @@ app = FastAPI(title="Backend Gateway API")
 security = HTTPBearer()
 
 # Health endpoint
-@app.get("/health")
+@app.get("/api/backend/health")
 async def health():
     return {"status": "ok", "service": "backend-gateway"}
 
 # Auth endpoints
-@app.post("/auth/login")
+@app.post("/api/backend/auth/login")
 async def login(request: LoginRequest):
     # Simple authentication logic
     pass
 
-# Geological data endpoints
-@app.get("/geological-sites")
-async def get_sites(token: str = Depends(security)):
-    # Aggregate data from multiple sources
+# Required geological query endpoint (from API table)
+@app.post("/api/backend/geological-query")
+async def geological_query(request: GeologicalQueryRequest, token: str = Depends(security)):
+    # Natural language geological search using AI
     pass
 
-# AI endpoints
-@app.post("/chat")
+# Required chat endpoint (from API table)
+@app.post("/api/backend/chat")
 async def chat(request: ChatRequest, token: str = Depends(security)):
     # Chat with AI using Cortex Engine
+    pass
+
+# Additional endpoints for frontend integration
+@app.get("/api/backend/geological-sites")
+async def get_sites(token: str = Depends(security)):
+    # List geological sites for map visualization
+    pass
+
+@app.get("/api/backend/geological-sites/{site_id}")
+async def get_site(site_id: int, token: str = Depends(security)):
+    # Get specific site details
+    pass
+
+@app.get("/api/backend/quality-metrics")
+async def quality_metrics(token: str = Depends(security)):
+    # Data quality metrics for dashboard
+    pass
+
+@app.post("/api/backend/spatial-query")
+async def spatial_query(request: SpatialQueryRequest, token: str = Depends(security)):
+    # Geographic/spatial queries for map features
     pass
 ```
 
@@ -242,6 +263,13 @@ class ChatResponse(BaseModel):
     conversation_id: str
     timestamp: datetime
 
+# Spatial Query Models
+class SpatialQueryRequest(BaseModel):
+    bounds: Optional[Dict[str, float]] = None  # {"north": -31.0, "south": -33.0, "east": 116.0, "west": 114.0}
+    geometry: Optional[str] = None  # WKT geometry for spatial intersection
+    distance_km: Optional[float] = None  # Distance from a point
+    center_point: Optional[Dict[str, float]] = None  # {"lat": -32.0, "lng": 115.0}
+
 # Standard Response Models
 class HealthResponse(BaseModel):
     status: str
@@ -254,25 +282,54 @@ class ErrorResponse(BaseModel):
     timestamp: datetime
 ```
 
-## Simplified API Endpoints (Essential Only)
+## Required API Endpoints (From API Interaction Table)
 
-### Core Endpoints (Must Have)
+### **Core Required Endpoints (MUST HAVE)**
 
-```
-GET  /health                    # Service health check
-POST /auth/login               # User authentication
-GET  /geological-sites         # List geological sites (with auth)
-GET  /geological-sites/{id}    # Get specific site (with auth)
-POST /chat                     # AI chat functionality (with auth)
-```
-
-### Optional Endpoints (Nice to Have)
+Based on the API interaction table, these are the **mandatory** endpoints:
 
 ```
-POST /auth/logout              # Logout (clear token client-side)
-GET  /dashboard/stats          # Dashboard statistics
-POST /geological-query         # Natural language search
+GET  /api/backend/health                    # Service health check
+POST /api/backend/auth/login               # User authentication
+POST /api/backend/geological-query         # Natural language geological search
+POST /api/backend/chat                     # AI chat functionality
 ```
+
+### **Additional Frontend Integration Endpoints (MUST HAVE)**
+
+Based on the communication flows, these endpoints are needed for full frontend integration:
+
+```
+GET  /api/backend/geological-sites         # List geological sites (for map data)
+GET  /api/backend/geological-sites/{id}    # Get specific site details
+GET  /api/backend/quality-metrics          # Data quality metrics for dashboard
+POST /api/backend/spatial-query            # Geographic/spatial queries for map
+```
+
+### **Authentication & User Management (MUST HAVE)**
+
+```
+POST /api/backend/auth/logout              # Logout functionality
+GET  /api/backend/auth/profile            # Get user profile info
+POST /api/backend/auth/refresh            # Refresh JWT tokens
+```
+
+### **Optional Enhancement Endpoints (NICE TO HAVE)**
+
+```
+GET  /api/backend/dashboard/stats          # Dashboard statistics and metrics
+GET  /api/backend/dashboard/map-data       # Optimized map visualization data
+POST /api/backend/similarity-search        # AI-powered similarity search
+POST /api/backend/generate-report         # AI-generated reports
+```
+
+### **API Prefix Note**
+
+All endpoints MUST use the `/api/backend` prefix as specified in the API interaction table:
+
+-   **Base URL**: `http://localhost:3003`
+-   **API Prefix**: `/api/backend`
+-   **Full Example**: `http://localhost:3003/api/backend/health`
 
 ## Dependencies (Minimal)
 
@@ -326,12 +383,12 @@ from main import app
 client = TestClient(app)
 
 def test_health():
-    response = client.get("/health")
+    response = client.get("/api/backend/health")
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
 
 def test_login():
-    response = client.post("/auth/login", json={
+    response = client.post("/api/backend/auth/login", json={
         "username": "admin",
         "password": "admin123"
     })
@@ -339,18 +396,18 @@ def test_login():
     assert "access_token" in response.json()
 
 def test_geological_sites_requires_auth():
-    response = client.get("/geological-sites")
+    response = client.get("/api/backend/geological-sites")
     assert response.status_code == 403  # No auth header
 
 def test_geological_sites_with_auth():
     # First login
-    login_response = client.post("/auth/login", json={
+    login_response = client.post("/api/backend/auth/login", json={
         "username": "admin", "password": "admin123"
     })
     token = login_response.json()["access_token"]
 
     # Then access protected endpoint
-    response = client.get("/geological-sites", headers={
+    response = client.get("/api/backend/geological-sites", headers={
         "Authorization": f"Bearer {token}"
     })
     assert response.status_code == 200
@@ -373,6 +430,9 @@ cp .env.example .env
 
 # Run the server
 uvicorn main:app --reload --port 3003
+
+# Test the API (remember the /api/backend prefix)
+curl http://localhost:3003/api/backend/health
 ```
 
 ### 2. Development Process
@@ -390,8 +450,8 @@ uvicorn main:app --reload --port 3003
 curl http://localhost:3001/health  # Data Foundation
 curl http://localhost:3002/health  # Cortex Engine
 
-# Test Backend Gateway
-curl http://localhost:3003/health
+# Test Backend Gateway (note the /api/backend prefix)
+curl http://localhost:3003/api/backend/health
 ```
 
 ## Key Benefits of Simplified Design
