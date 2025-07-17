@@ -4,6 +4,17 @@
 
 This document outlines a **simplified, practical design** for Module 3 (Backend Gateway API) using FastAPI. The focus is on creating a minimal but functional API gateway that can be built quickly while meeting all core requirements.
 
+## ⚠️ **Important: Actual API Consistency Note**
+
+This design has been **updated to match the actual implemented APIs** in modules 1 and 2:
+
+-   **Data Foundation API (Module 1)**: Runs on `http://localhost:8000` (not 3001 as in API table)
+-   **Cortex Engine API (Module 2)**: Runs on `http://localhost:3002` (correct)
+-   **Data Foundation endpoints**: Use `/reports` (not `/geological-sites` as in API table)
+-   **Cortex Engine endpoints**: Match the API table specifications ✅
+
+**Backend Gateway will adapt to the actual APIs while maintaining the required `/api/backend` prefix for its own endpoints.**
+
 ## Design Principles
 
 1. **Keep it Simple** - Minimal directory structure, essential files only
@@ -62,35 +73,62 @@ async def login(request: LoginRequest):
 # Required geological query endpoint (from API table)
 @app.post("/api/backend/geological-query")
 async def geological_query(request: GeologicalQueryRequest, token: str = Depends(security)):
-    # Natural language geological search using AI
-    pass
+    # 1. Use AI to understand the query via Module 2
+    ai_response = await cortex_client.chat_query(request.query)
+
+    # 2. Get relevant reports from Module 1
+    reports = await data_client.get_reports(limit=request.limit)
+
+    # 3. Combine AI insights with data
+    return {
+        "query": request.query,
+        "ai_explanation": ai_response.get("result", ""),
+        "results": reports[:request.limit],
+        "total_found": len(reports)
+    }
 
 # Required chat endpoint (from API table)
 @app.post("/api/backend/chat")
 async def chat(request: ChatRequest, token: str = Depends(security)):
-    # Chat with AI using Cortex Engine
-    pass
+    # Direct pass-through to Module 2: POST /rag-query
+    ai_response = await cortex_client.chat_query(request.message)
+    return {
+        "response": ai_response.get("result", ""),
+        "conversation_id": request.conversation_id or "default",
+        "timestamp": datetime.utcnow(),
+        "sources": []  # Could be enhanced with report sources
+    }
 
-# Additional endpoints for frontend integration
+# Additional endpoints for frontend integration (mapped to actual Module 1 endpoints)
 @app.get("/api/backend/geological-sites")
-async def get_sites(token: str = Depends(security)):
-    # List geological sites for map visualization
-    pass
+async def get_sites(limit: int = 10, offset: int = 0, token: str = Depends(security)):
+    # Maps to Module 1: GET /reports
+    return await data_client.get_reports(limit=limit, offset=offset)
 
 @app.get("/api/backend/geological-sites/{site_id}")
 async def get_site(site_id: int, token: str = Depends(security)):
-    # Get specific site details
-    pass
+    # Maps to Module 1: GET /reports/{id}
+    return await data_client.get_report_by_id(site_id)
 
 @app.get("/api/backend/quality-metrics")
 async def quality_metrics(token: str = Depends(security)):
-    # Data quality metrics for dashboard
-    pass
+    # Data quality metrics - aggregate from Module 1 data
+    reports = await data_client.get_reports(limit=100)
+    return {
+        "total_reports": len(reports),
+        "unique_commodities": len(set(r.get("TARGET_COM", "") for r in reports)),
+        "date_range": {"min": "1970", "max": "2024"},  # Example
+        "data_quality_score": 99.5
+    }
 
 @app.post("/api/backend/spatial-query")
 async def spatial_query(request: SpatialQueryRequest, token: str = Depends(security)):
-    # Geographic/spatial queries for map features
-    pass
+    # Maps to Module 1: GET /reports/filter with geographic filtering
+    # This would need custom logic to handle spatial filtering
+    filtered_reports = await data_client.filter_reports(
+        commodity=request.commodity if hasattr(request, 'commodity') else None
+    )
+    return {"results": filtered_reports}
 ```
 
 ### 2. `config.py` - Configuration Management
@@ -113,9 +151,9 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     token_expire_minutes: int = 30
 
-    # Service URLs
-    data_foundation_url: str = "http://localhost:3001"
-    cortex_engine_url: str = "http://localhost:3002"
+    # Service URLs (actual ports from implemented modules)
+    data_foundation_url: str = "http://localhost:8000"  # Module 1 actual port
+    cortex_engine_url: str = "http://localhost:3002"    # Module 2 actual port
 
     class Config:
         env_file = ".env"
@@ -178,6 +216,7 @@ class DataFoundationClient:
         self.base_url = settings.data_foundation_url
 
     async def get_reports(self, limit: int = 10, offset: int = 0):
+        """Get reports using actual Module 1 endpoint: GET /reports"""
         async with httpx.AsyncClient() as client:
             response = await client.get(
                 f"{self.base_url}/reports",
@@ -187,8 +226,31 @@ class DataFoundationClient:
             return response.json()
 
     async def get_report_by_id(self, report_id: int):
+        """Get single report using actual Module 1 endpoint: GET /reports/{id}"""
         async with httpx.AsyncClient() as client:
             response = await client.get(f"{self.base_url}/reports/{report_id}")
+            response.raise_for_status()
+            return response.json()
+
+    async def filter_reports(self, commodity: str = None, year: int = None, company: str = None):
+        """Filter reports using actual Module 1 endpoint: GET /reports/filter"""
+        params = {}
+        if commodity:
+            params["commodity"] = commodity
+        if year:
+            params["year"] = year
+        if company:
+            params["company"] = company
+
+        async with httpx.AsyncClient() as client:
+            response = await client.get(f"{self.base_url}/reports/filter", params=params)
+            response.raise_for_status()
+            return response.json()
+
+    async def get_report_geometry(self, report_id: int):
+        """Get report geometry using actual Module 1 endpoint: GET /reports/{id}/geometry"""
+        async with httpx.AsyncClient() as client:
+            response = await client.get(f"{self.base_url}/reports/{report_id}/geometry")
             response.raise_for_status()
             return response.json()
 
@@ -196,7 +258,32 @@ class CortexEngineClient:
     def __init__(self):
         self.base_url = settings.cortex_engine_url
 
+    async def health_check(self):
+        """Check health using actual Module 2 endpoint: GET /health"""
+        async with httpx.AsyncClient() as client:
+            response = await client.get(f"{self.base_url}/health")
+            response.raise_for_status()
+            return response.json()
+
+    async def get_config(self):
+        """Get config using actual Module 2 endpoint: GET /config"""
+        async with httpx.AsyncClient() as client:
+            response = await client.get(f"{self.base_url}/config")
+            response.raise_for_status()
+            return response.json()
+
+    async def generate_embeddings(self, data: List[str]):
+        """Generate embeddings using actual Module 2 endpoint: POST /embed"""
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{self.base_url}/embed",
+                json={"data": data}
+            )
+            response.raise_for_status()
+            return response.json()
+
     async def chat_query(self, query: str):
+        """RAG query using actual Module 2 endpoint: POST /rag-query"""
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 f"{self.base_url}/rag-query",
@@ -206,6 +293,7 @@ class CortexEngineClient:
             return response.json()
 
     async def similarity_search(self, query_vector: List[float], top_k: int = 5):
+        """Similarity search using actual Module 2 endpoint: POST /similarity-search"""
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 f"{self.base_url}/similarity-search",
@@ -363,8 +451,8 @@ JWT_SECRET=your-super-secret-key-change-this-in-production
 JWT_ALGORITHM=HS256
 TOKEN_EXPIRE_MINUTES=30
 
-# Service URLs
-DATA_FOUNDATION_URL=http://localhost:3001
+# Service URLs (actual implemented ports)
+DATA_FOUNDATION_URL=http://localhost:8000
 CORTEX_ENGINE_URL=http://localhost:3002
 
 # CORS (for frontend)
@@ -446,9 +534,9 @@ curl http://localhost:3003/api/backend/health
 ### 3. Integration Testing
 
 ```bash
-# Ensure other modules are running
-curl http://localhost:3001/health  # Data Foundation
-curl http://localhost:3002/health  # Cortex Engine
+# Ensure other modules are running (using actual ports)
+curl http://localhost:8000/reports  # Data Foundation (no health endpoint implemented)
+curl http://localhost:3002/health   # Cortex Engine
 
 # Test Backend Gateway (note the /api/backend prefix)
 curl http://localhost:3003/api/backend/health
