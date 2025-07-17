@@ -1,8 +1,8 @@
 import numpy as np
 from typing import List, Tuple, Any, Dict
-from vector_store import VectorStore
+from .vector_store import VectorStore
 from openai import AzureOpenAI
-from config import config
+from .config import config
 
 def compute_similarity(vec1: np.ndarray, vec2: np.ndarray) -> float:
     """Compute cosine similarity between two vectors."""
@@ -57,7 +57,7 @@ class SimilaritySearch:
             raise RuntimeError("Azure OpenAI client not initialized for RAG")
 
         # Step 1: Generate embedding for the query
-        from embedding import EmbeddingGenerator
+        from .embedding import EmbeddingGenerator
         embedding_gen = EmbeddingGenerator()
         query_embedding = embedding_gen.generate_embeddings([query])[0]
 

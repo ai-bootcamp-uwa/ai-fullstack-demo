@@ -1,7 +1,7 @@
 import numpy as np
 from openai import AzureOpenAI
 from typing import List, Any
-from config import config
+from .config import config
 
 class EmbeddingGenerator:
     def __init__(self):

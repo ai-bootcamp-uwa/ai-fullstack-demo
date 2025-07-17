@@ -4,6 +4,10 @@ Centralizes all model and API settings - NO DEFAULTS, ONLY .env VALUES.
 """
 import os
 from typing import Optional
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 class AzureOpenAIConfig:
     """Configuration class for Azure OpenAI settings - strict mode, no defaults."""

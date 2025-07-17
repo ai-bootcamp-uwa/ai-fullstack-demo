@@ -42,6 +42,7 @@ cortex_engine/
 ## Installation and Setup
 
 ⚡ **Quick Start:** See [`docs/AZURE_OPENAI_SETUP.md`](./docs/AZURE_OPENAI_SETUP.md) for complete setup instructions.
+🚀 **Execution Guide:** See [`docs/EXECUTION.md`](./docs/EXECUTION.md) for step-by-step execution instructions.
 
 1. **Install dependencies:**
 
@@ -244,10 +245,12 @@ Based on the API interaction requirements:
 
 ## Documentation
 
+- `EXECUTION.md`: Complete execution guide with cost optimization
+- `AZURE_OPENAI_SETUP.md`: Azure OpenAI setup instructions
+- `TESTING.md`: Testing procedures and validation
 - `WORKFLOW.md`: Development workflow and best practices
-- `TODO.md`: Current task list and priorities
 - `API_TESTING.md`: Comprehensive API testing guide
-- `AZURE_SETUP.md`: Azure OpenAI setup instructions
+- `TODO.md`: Current task list and priorities
 - `env.example`: Environment variables template
 
 ## Contributing
