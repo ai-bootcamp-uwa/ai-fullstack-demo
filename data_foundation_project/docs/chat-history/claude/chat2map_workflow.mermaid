@@ -1,0 +1,98 @@
+graph TD
+    %% User Query Input
+    USER[👤 User Input<br/>Find gold mines near Perth<br/>Show copper deposits in Pilbara<br/>What minerals are in Kalgoorlie?]
+    
+    %% Module 4: Frontend UI (Entry Point)
+    subgraph M4[💻 Module 4 Frontend UI]
+        CHAT[Chat Interface<br/>📝 Captures user query<br/>⏱️ Validates input format]
+        MAP[Interactive Map<br/>🗺️ Displays current view<br/>📍 Shows user location]
+    end
+    
+    %% Module 3: Backend API Processing
+    subgraph M3[🔗 Module 3 Backend API]
+        AUTH[Authentication<br/>🔐 JWT token validation<br/>⏱️ <50ms auth check]
+        NL_PARSE[Query Parser<br/>🧠 Natural language processing<br/>📝 Extract location + mineral type]
+        API_ROUTE[API Router<br/>🚦 Route to appropriate endpoint<br/>⏱️ <200ms total response]
+    end
+    
+    %% Module 2: AI/Cortex Processing
+    subgraph M2[🤖 Module 2 AI Cortex Engine]
+        CORTEX_LLM[Cortex LLM<br/>SNOWFLAKE.CORTEX.COMPLETE<br/>🎯 Query intent understanding]
+        EMBED_QUERY[Query Embedding<br/>CORTEX.EMBED_TEXT_1024<br/>🔢 Convert query to vector]
+        VECTOR_SEARCH[Vector Similarity Search<br/>VECTOR_COSINE_SIMILARITY<br/>📊 Find relevant geological sites]
+        RAG_RESPONSE[RAG System<br/>CORTEX.EXTRACT_ANSWER<br/>💬 Generate contextual response]
+    end
+    
+    %% Module 1: Data Layer
+    subgraph M1[🗃️ Module 1 Data Foundation]
+        SNOW_QUERY[Snowflake Query<br/>📊 Execute spatial SQL<br/>⏱️ <100ms data retrieval]
+        GEO_FILTER[Geospatial Filter<br/>🌍 Apply location boundaries<br/>📐 Distance calculations]
+        DATA_RETURN[Structured Results<br/>📋 Geological metadata<br/>📍 Coordinates + attributes]
+    end
+    
+    %% Response Flow Back to User
+    subgraph RESPONSE[📤 Response Generation]
+        JSON_FORMAT[JSON Response<br/>🔧 Format data for frontend<br/>📊 Include metadata + coordinates]
+        MAP_UPDATE[Map Visualization<br/>🗺️ Plot geological sites<br/>📍 Show search results]
+        CHAT_REPLY[Chat Response<br/>💬 Natural language answer<br/>✨ Conversational format]
+    end
+    
+    %% Query Flow Forward
+    USER --> CHAT
+    CHAT --> AUTH
+    AUTH --> NL_PARSE
+    NL_PARSE --> API_ROUTE
+    API_ROUTE --> CORTEX_LLM
+    CORTEX_LLM --> EMBED_QUERY
+    EMBED_QUERY --> VECTOR_SEARCH
+    VECTOR_SEARCH --> SNOW_QUERY
+    SNOW_QUERY --> GEO_FILTER
+    GEO_FILTER --> DATA_RETURN
+    
+    %% AI Enhancement Flow
+    DATA_RETURN --> RAG_RESPONSE
+    RAG_RESPONSE --> JSON_FORMAT
+    
+    %% Response Flow Back
+    JSON_FORMAT --> MAP_UPDATE
+    JSON_FORMAT --> CHAT_REPLY
+    MAP_UPDATE --> MAP
+    CHAT_REPLY --> CHAT
+    
+    %% Measurable Performance Checkpoints
+    AUTH -.->|✅ Student Assessment<br/>Authentication <50ms| PERF1[Week 6 Checkpoint<br/>Security implementation<br/>JWT validation working]
+    
+    API_ROUTE -.->|✅ Student Assessment<br/>API response <200ms| PERF2[Week 6 Checkpoint<br/>Backend performance<br/>10+ concurrent users]
+    
+    VECTOR_SEARCH -.->|✅ Student Assessment<br/>Similarity >85% relevance| PERF3[Week 4 Checkpoint<br/>Cortex vector operations<br/>5000+ embeddings searchable]
+    
+    SNOW_QUERY -.->|✅ Student Assessment<br/>Query execution <100ms| PERF4[Week 2 Checkpoint<br/>Database optimization<br/>10000+ records accessible]
+    
+    MAP_UPDATE -.->|✅ Student Assessment<br/>Map render <2 seconds| PERF5[Week 8 Checkpoint<br/>Frontend performance<br/>1000+ markers displayable]
+    
+    %% Learning Outcome Validation Points
+    CORTEX_LLM -.->|Snowflake Cortex Mastery| LEARN1[Learning Outcome<br/>CORTEX.COMPLETE proficiency<br/>Natural language understanding]
+    
+    VECTOR_SEARCH -.->|AI Engineering Skills| LEARN2[Learning Outcome<br/>Vector similarity search<br/>Embedding-based retrieval]
+    
+    RAG_RESPONSE -.->|Full Stack Integration| LEARN3[Learning Outcome<br/>RAG pipeline implementation<br/>Context-aware responses]
+    
+    %% Real-time User Experience Flow
+    USER -.->|End-to-End Journey<br/>Query to Response| UX1[Measurable UX<br/>Total response time<br/>User satisfaction metrics]
+    
+    CHAT -.->|Production Ready<br/>Deployed Application| UX1
+    
+    %% Color coding for supervision clarity
+    classDef frontend fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    classDef backend fill:#e8f5e8,stroke:#388e3c,stroke-width:2px
+    classDef ai fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+    classDef data fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    classDef checkpoint fill:#ffeb3b,stroke:#f57f17,stroke-width:3px
+    classDef learning fill:#e0f2f1,stroke:#00695c,stroke-width:2px
+    
+    class CHAT,MAP,MAP_UPDATE,CHAT_REPLY frontend
+    class AUTH,NL_PARSE,API_ROUTE,JSON_FORMAT backend
+    class CORTEX_LLM,EMBED_QUERY,VECTOR_SEARCH,RAG_RESPONSE ai
+    class SNOW_QUERY,GEO_FILTER,DATA_RETURN data
+    class PERF1,PERF2,PERF3,PERF4,PERF5 checkpoint
+    class LEARN1,LEARN2,LEARN3 learning
