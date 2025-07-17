@@ -5,6 +5,7 @@ The Cortex Engine is a FastAPI-based vector processing module that provides embe
 ## Overview
 
 This module serves as the AI/Cortex Engine API in the full-stack AI engineer bootcamp project, providing:
+
 - Text/data embedding generation using Azure OpenAI
 - Vector storage and similarity search
 - RAG query capabilities
@@ -15,71 +16,88 @@ This module serves as the AI/Cortex Engine API in the full-stack AI engineer boo
 
 ```
 cortex_engine/
-├── src/
+├── src/                          # Source code
 │   ├── __init__.py
-│   ├── main.py              # FastAPI app with API endpoints
-│   ├── embedding.py         # Azure OpenAI embedding generation
-│   ├── vector_store.py      # Vector storage and search
-│   ├── similarity.py        # Similarity computation and RAG
-│   ├── data_client.py       # Client for Data Foundation API
-│   └── config.py            # Azure OpenAI configuration
-├── requirements.txt         # Dependencies
-├── setup.py                # Package configuration
-├── README.md               # This file
-├── WORKFLOW.md             # Development workflow
-├── TODO.md                 # Task tracking
-├── API_TESTING.md          # API testing guide
-├── AZURE_SETUP.md          # Azure OpenAI setup guide
-└── env.example             # Environment variables template
+│   ├── main.py                   # FastAPI app with API endpoints
+│   ├── embedding.py              # Azure OpenAI embedding generation
+│   ├── vector_store.py           # Vector storage and search
+│   ├── similarity.py             # Similarity computation and RAG
+│   ├── data_client.py            # Client for Data Foundation API
+│   └── config.py                 # Azure OpenAI configuration
+├── docs/                         # Documentation
+│   ├── AZURE_OPENAI_SETUP.md     # Complete Azure OpenAI setup guide
+│   ├── QUICK_START.md            # 5-minute setup reference
+│   ├── API_TESTING.md            # API testing guide
+│   ├── WORKFLOW.md               # Development workflow
+│   └── TODO.md                   # Task tracking
+├── tests/                        # Test files
+│   └── test_deployments.py       # Configuration validation script
+├── requirements.txt              # Dependencies
+├── setup.py                     # Package configuration
+├── env.example                  # Environment variables template
+├── README.md                    # This file
+└── .gitignore                   # Git ignore rules
 ```
 
 ## Installation and Setup
 
+⚡ **Quick Start:** See [`docs/AZURE_OPENAI_SETUP.md`](./docs/AZURE_OPENAI_SETUP.md) for complete setup instructions.
+🚀 **Execution Guide:** See [`docs/EXECUTION.md`](./docs/EXECUTION.md) for step-by-step execution instructions.
+
 1. **Install dependencies:**
+
    ```bash
    pip install -r requirements.txt
    ```
 
 2. **Install the package in development mode:**
+
    ```bash
    pip install -e .
    ```
 
-3. **Configure Azure OpenAI (Optional):**
+3. **Configure Azure OpenAI (Required):**
+
    ```bash
    cp env.example .env
-   # Edit .env with your Azure OpenAI credentials
-   export AZURE_OPENAI_API_KEY="your-api-key"
-   export AZURE_OPENAI_ENDPOINT="your-endpoint"
+   # Edit .env with ALL required values - no defaults!
+   python tests/test_deployments.py  # Test your configuration
    ```
+
+   **⚠️ Strict Configuration Mode:** All Azure OpenAI settings are required with no defaults. See the [complete setup guide](./docs/AZURE_OPENAI_SETUP.md) for detailed instructions.
 
 ## API Endpoints
 
 The Cortex Engine provides the following REST API endpoints:
 
 ### Health Check
+
 - **GET** `/health`
 - Returns: `{"status": "ok", "azure_openai_configured": bool, "configuration_valid": bool, ...}`
 - Includes Azure OpenAI configuration status and validation
 
 ### Configuration Status
+
 - **GET** `/config`
 - Returns: Detailed configuration information (without sensitive data)
 - Shows Azure OpenAI settings, rate limits, and retry configuration
 
 ### Embedding Generation
+
 - **POST** `/embed`
 - Request: `{"data": ["text1", "text2", ...]}`
 - Response: `{"embeddings": [[vector1], [vector2], ...]}`
 - Generates embeddings using Azure OpenAI and stores them in the vector store
 
 ### Similarity Search
+
 - **POST** `/similarity-search`
 - Request: `{"query_vector": [vector], "top_k": 5}`
 - Response: `{"results": [(index, score, metadata), ...]}`
 - Finds the most similar vectors using cosine similarity
 
 ### RAG Query
+
 - **POST** `/rag-query`
 - Request: `{"query": "text query"}`
 - Response: `{"result": "response", "query": "original query"}`
@@ -129,6 +147,7 @@ result = response.json()
 The module includes comprehensive testing capabilities. See `API_TESTING.md` for detailed testing instructions.
 
 Basic API testing:
+
 ```bash
 # Test all endpoints
 curl http://localhost:3002/health
@@ -138,13 +157,16 @@ curl http://localhost:3002/config
 ## Azure OpenAI Integration
 
 ### Configuration
+
 The module supports Azure OpenAI integration with the following features:
+
 - Configurable endpoints and API versions
 - Rate limiting and retry logic
 - Multiple model support (embedding and chat models)
 - Environment-based configuration
 
 ### Environment Variables
+
 ```bash
 AZURE_OPENAI_ENDPOINT=your-endpoint
 AZURE_OPENAI_API_KEY=your-api-key
@@ -156,11 +178,13 @@ MAX_EMBEDDING_TOKENS_PER_MINUTE=20000
 ```
 
 ### Fallback Mode
+
 If Azure OpenAI is not configured, the module falls back to random embeddings for development and testing purposes.
 
 ## Integration with Other Modules
 
 ### Data Foundation API Integration
+
 The `DataFoundationClient` class provides methods to fetch data from the Data Foundation API:
 
 ```python
@@ -172,6 +196,7 @@ report = await client.fetch_report_by_id(123)
 ```
 
 ### Module Dependencies
+
 - **Module 1 (Data Foundation)**: Provides geological data for embedding
 - **Module 3 (Backend Gateway)**: Consumes AI/vector services
 - **Module 4 (Frontend UI)**: Displays AI-powered features
@@ -189,6 +214,7 @@ The Cortex Engine uses a modular architecture:
 ## Performance Targets
 
 Based on the API interaction requirements:
+
 - ✅ 1000+ embeddings in <5min
 - ✅ 85% similarity search accuracy
 - ✅ <500ms RAG responses
@@ -219,10 +245,12 @@ Based on the API interaction requirements:
 
 ## Documentation
 
+- `EXECUTION.md`: Complete execution guide with cost optimization
+- `AZURE_OPENAI_SETUP.md`: Azure OpenAI setup instructions
+- `TESTING.md`: Testing procedures and validation
 - `WORKFLOW.md`: Development workflow and best practices
-- `TODO.md`: Current task list and priorities
 - `API_TESTING.md`: Comprehensive API testing guide
-- `AZURE_SETUP.md`: Azure OpenAI setup instructions
+- `TODO.md`: Current task list and priorities
 - `env.example`: Environment variables template
 
 ## Contributing
