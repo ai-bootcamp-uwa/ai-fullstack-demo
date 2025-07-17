@@ -1,6 +1,13 @@
 from fastapi import FastAPI, HTTPException, Query
 from pathlib import Path
-from data_foundation_project.src.data_access import DataLoader
+import sys
+import os
+
+# Add parent directories to Python path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from src.data_access import DataLoader
 import geopandas as gpd
 
 app = FastAPI(title="Exploration Reports API")
