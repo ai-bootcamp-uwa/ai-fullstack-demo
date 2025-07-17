@@ -4,3 +4,5 @@ httpx
 numpy
 scikit-learn
 pandas
+openai
+python-dotenv
