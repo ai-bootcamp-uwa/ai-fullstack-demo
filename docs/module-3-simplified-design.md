@@ -21,6 +21,12 @@ This design has been **updated to match the actual implemented APIs** in modules
 -   **Module 3 `/api/backend/geological-sites`** → **Module 1 `/reports`**
 -   **Module 3 `/api/backend/geological-query`** → **Both modules combined** (AI + data)
 
+### **Testing Configuration:**
+
+-   **Module 1 Data**: 114,132 total reports available, but **limited to 5 reports for testing**
+-   **Default limits**: All endpoints default to `limit=5` for fast testing and development
+-   **Sample reports**: ANUMBERs 1-5 (covering COPPER, NICKEL, IRON commodities from 1968-1971)
+
 ## Design Principles
 
 1. **Keep it Simple** - Minimal directory structure, essential files only
@@ -82,8 +88,8 @@ async def geological_query(request: GeologicalQueryRequest, token: str = Depends
     # 1. Use AI to understand the query via Module 2 RAG
     ai_response = await cortex_client.rag_query(request.query)
 
-    # 2. Get relevant reports from Module 1
-    reports = await data_client.get_reports(limit=request.limit)
+        # 2. Get relevant reports from Module 1 (limited to 5 for testing)
+    reports = await data_client.get_reports(limit=min(request.limit, 5))
 
     # 3. Combine AI insights with data
     return {
@@ -107,8 +113,8 @@ async def chat(request: ChatRequest, token: str = Depends(security)):
 
 # Additional endpoints for frontend integration (mapped to actual Module 1 endpoints)
 @app.get("/api/backend/geological-sites")
-async def get_sites(limit: int = 10, offset: int = 0, token: str = Depends(security)):
-    # Maps to Module 1: GET /reports
+async def get_sites(limit: int = 5, offset: int = 0, token: str = Depends(security)):
+    # Maps to Module 1: GET /reports (default to 5 for testing)
     return await data_client.get_reports(limit=limit, offset=offset)
 
 @app.get("/api/backend/geological-sites/{site_id}")
@@ -118,13 +124,14 @@ async def get_site(site_id: int, token: str = Depends(security)):
 
 @app.get("/api/backend/quality-metrics")
 async def quality_metrics(token: str = Depends(security)):
-    # Data quality metrics - aggregate from Module 1 data
-    reports = await data_client.get_reports(limit=100)
+    # Data quality metrics - aggregate from Module 1 data (using only 5 reports for testing)
+    reports = await data_client.get_reports(limit=5)
     return {
         "total_reports": len(reports),
         "unique_commodities": len(set(r.get("TARGET_COM", "") for r in reports)),
-        "date_range": {"min": "1970", "max": "2024"},  # Example
-        "data_quality_score": 99.5
+        "date_range": {"min": "1970", "max": "2024"},  # Based on sample data
+        "data_quality_score": 99.5,
+        "sample_size": 5  # Indicate this is a sample for testing
     }
 
 @app.post("/api/backend/spatial-query")
