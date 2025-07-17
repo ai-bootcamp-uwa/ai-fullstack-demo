@@ -15,6 +15,12 @@ This design has been **updated to match the actual implemented APIs** in modules
 
 **Backend Gateway will adapt to the actual APIs while maintaining the required `/api/backend` prefix for its own endpoints.**
 
+### **Key Endpoint Mappings:**
+
+-   **Module 3 `/api/backend/chat`** → **Module 2 `/rag-query`** (RAG = chat functionality)
+-   **Module 3 `/api/backend/geological-sites`** → **Module 1 `/reports`**
+-   **Module 3 `/api/backend/geological-query`** → **Both modules combined** (AI + data)
+
 ## Design Principles
 
 1. **Keep it Simple** - Minimal directory structure, essential files only
@@ -73,8 +79,8 @@ async def login(request: LoginRequest):
 # Required geological query endpoint (from API table)
 @app.post("/api/backend/geological-query")
 async def geological_query(request: GeologicalQueryRequest, token: str = Depends(security)):
-    # 1. Use AI to understand the query via Module 2
-    ai_response = await cortex_client.chat_query(request.query)
+    # 1. Use AI to understand the query via Module 2 RAG
+    ai_response = await cortex_client.rag_query(request.query)
 
     # 2. Get relevant reports from Module 1
     reports = await data_client.get_reports(limit=request.limit)
@@ -87,16 +93,16 @@ async def geological_query(request: GeologicalQueryRequest, token: str = Depends
         "total_found": len(reports)
     }
 
-# Required chat endpoint (from API table)
+# Required chat endpoint (from API table) - maps to Module 2 RAG-query
 @app.post("/api/backend/chat")
 async def chat(request: ChatRequest, token: str = Depends(security)):
-    # Direct pass-through to Module 2: POST /rag-query
-    ai_response = await cortex_client.chat_query(request.message)
+    # Direct pass-through to Module 2: POST /rag-query (this IS the chat functionality)
+    ai_response = await cortex_client.rag_query(request.message)
     return {
         "response": ai_response.get("result", ""),
         "conversation_id": request.conversation_id or "default",
         "timestamp": datetime.utcnow(),
-        "sources": []  # Could be enhanced with report sources
+        "sources": []  # Could be enhanced with report sources from Module 2 response
     }
 
 # Additional endpoints for frontend integration (mapped to actual Module 1 endpoints)
@@ -282,8 +288,8 @@ class CortexEngineClient:
             response.raise_for_status()
             return response.json()
 
-    async def chat_query(self, query: str):
-        """RAG query using actual Module 2 endpoint: POST /rag-query"""
+    async def rag_query(self, query: str):
+        """RAG query using actual Module 2 endpoint: POST /rag-query (this IS the chat functionality)"""
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 f"{self.base_url}/rag-query",
