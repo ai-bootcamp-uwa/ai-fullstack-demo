@@ -67,6 +67,9 @@ nano .env  # or use your preferred editor
 # Activate virtual environment
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 
+# Ensure port 8000 is free (kill any existing process)
+lsof -ti:8000 | xargs kill -9 2>/dev/null || true
+
 cd data_foundation_project
 uvicorn src.api.main:app --port 8000
 ```
@@ -78,6 +81,9 @@ uvicorn src.api.main:app --port 8000
 ```bash
 # Activate virtual environment
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+# Ensure port 3002 is free (kill any existing process)
+lsof -ti:3002 | xargs kill -9 2>/dev/null || true
 
 cd cortex_engine
 uvicorn src.main:app --port 3002
