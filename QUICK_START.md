@@ -102,6 +102,9 @@ uvicorn src.main:app --port 3002
 # Activate virtual environment
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 
+# Ensure port 3003 is free (kill any existing process)
+lsof -ti:3003 | xargs kill -9 2>/dev/null || true
+
 cd backend_gateway
 uvicorn main:app --reload --port 3003
 ```
