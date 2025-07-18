@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Get auth token from headers (use fresh token for testing)
-    const authHeader = req.headers.get('authorization') || 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbiIsImV4cCI6MTc1MjgxNTAzN30.PTQTHsDQ17Bz-F1dYpw1FCz8TeAPzTrUGxTrGxJN2SM';
+    const authHeader = req.headers.get('authorization') || 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbiIsImV4cCI6MTc1MjkxMzkyNX0.OE-rGhmlo95-aZYJA9_oF_CxqVmZLikJzkEfsZOOp1M';
 
     // Get response from our backend
     const response = await axios.post(
