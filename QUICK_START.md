@@ -22,18 +22,11 @@ cd ai-fullstack-demo-clean
 python -m venv .venv
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 
-# Install Module 1 (Data Foundation)
+# Install all dependencies (all modules)
+pip install -r requirements.txt
+
+# Install Module 1 (Data Foundation) in development mode
 pip install -e ./data_foundation_project
-
-# Install Module 2 (Cortex Engine)
-cd cortex_engine
-pip install -r requirements.txt
-cd ..
-
-# Install Module 3 (Backend Gateway)
-cd backend_gateway
-pip install -r requirements.txt
-cd ..
 ```
 
 ### 2. Configure Azure OpenAI
