@@ -1,0 +1,23 @@
+# Snowflake Configuration - Copy to .env and fill in your values
+SNOWFLAKE_ACCOUNT=your_account.region
+SNOWFLAKE_USER=your_username
+SNOWFLAKE_PASSWORD=your_password
+SNOWFLAKE_WAREHOUSE=COMPUTE_WH
+SNOWFLAKE_DATABASE=WAMEX_EXPLORATION
+SNOWFLAKE_SCHEMA=GEOSPATIAL_DATA
+SNOWFLAKE_ROLE=DATA_ENGINEER
+
+# Application Configuration
+DEBUG=true
+LOG_LEVEL=INFO
+API_HOST=localhost
+API_PORT=8000
+
+# External API URLs (for integration)
+CORTEX_ENGINE_URL=http://localhost:3002
+BACKEND_GATEWAY_URL=http://localhost:3003
+
+# Instructions:
+# 1. Copy this file to .env in the same directory
+# 2. Replace the placeholder values with your actual Snowflake credentials
+# 3. The .env file will be ignored by git for security 

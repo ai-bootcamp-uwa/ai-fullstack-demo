@@ -1,0 +1,393 @@
+import snowflake.connector
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import sessionmaker
+from typing import List, Dict, Any, Optional
+import pandas as pd
+import geopandas as gpd
+from shapely import wkt
+import logging
+from contextlib import contextmanager
+
+from .config import snowflake_config
+
+logger = logging.getLogger(__name__)
+
+class SnowflakeClient:
+    """Snowflake client for geological data operations"""
+    
+    def __init__(self):
+        self.config = snowflake_config
+        self._engine = None
+        self._session_factory = None
+        
+    def _get_engine(self):
+        """Create or return SQLAlchemy engine for Snowflake"""
+        if self._engine is None:
+            if not self.config.validate_credentials():
+                raise ValueError("Snowflake credentials are not properly configured. Check your .env file.")
+            
+            # Get connection parameters
+            conn_params = self.config.get_connection_params()
+            
+            # Create Snowflake connection URL for SQLAlchemy
+            if self.config.authenticator == "externalbrowser":
+                # For external browser auth, don't include password in URL
+                connection_url = (
+                    f"snowflake://{self.config.user}@{self.config.account}/"
+                    f"{self.config.database}/{self.config.schema}"
+                    f"?warehouse={self.config.warehouse}&authenticator=externalbrowser"
+                )
+            else:
+                # Standard authentication with password
+                connection_url = (
+                    f"snowflake://{self.config.user}:{self.config.password}"
+                    f"@{self.config.account}/{self.config.database}/{self.config.schema}"
+                    f"?warehouse={self.config.warehouse}"
+                )
+                
+            if self.config.role:
+                connection_url += f"&role={self.config.role}"
+                
+            self._engine = create_engine(connection_url)
+            self._session_factory = sessionmaker(bind=self._engine)
+            logger.info(f"Created Snowflake engine for {self.config.database}.{self.config.schema}")
+        
+        return self._engine
+    
+    @contextmanager
+    def get_connection(self):
+        """Context manager for database connections"""
+        engine = self._get_engine()
+        connection = engine.connect()
+        try:
+            yield connection
+        finally:
+            connection.close()
+    
+    def test_connection(self) -> bool:
+        """Test Snowflake connection"""
+        try:
+            # Use direct snowflake.connector for testing (more reliable for auth)
+            conn_params = self.config.get_connection_params()
+            conn = snowflake.connector.connect(**conn_params)
+            
+            # Test with a simple query
+            cursor = conn.cursor()
+            cursor.execute("SELECT 1 as test")
+            result = cursor.fetchone()
+            cursor.close()
+            conn.close()
+            
+            logger.info("Snowflake connection test successful")
+            return result[0] == 1
+            
+        except Exception as e:
+            logger.error(f"Snowflake connection test failed: {e}")
+            return False
+    
+    def execute_query(self, query: str, params: Optional[Dict] = None) -> List[Dict[str, Any]]:
+        """Execute a query and return results as list of dictionaries"""
+        try:
+            with self.get_connection() as conn:
+                result = conn.execute(text(query), params or {})
+                columns = result.keys()
+                rows = result.fetchall()
+                results = [dict(zip(columns, row)) for row in rows]
+                
+                # Normalize results for API compatibility
+                normalized_results = []
+                for row in results:
+                    normalized_row = self._normalize_result_row(row)
+                    normalized_results.append(normalized_row)
+                
+                return normalized_results
+        except Exception as e:
+            logger.error(f"Query execution failed: {e}")
+            raise
+    
+    def _normalize_result_row(self, row: Dict[str, Any]) -> Dict[str, Any]:
+        """Normalize a result row for API compatibility"""
+        normalized = {}
+        
+        # Copy all fields as-is first
+        for key, value in row.items():
+            normalized[key] = value
+            
+        # Add uppercase versions of key fields for compatibility
+        key_mappings = {
+            'anumber': 'ANUMBER',
+            'title': 'TITLE', 
+            'report_year': 'REPORT_YEAR',
+            'operator': 'OPERATOR',
+            'target_commodities': 'TARGET_COMMODITIES',
+            'geometry': 'GEOMETRY'
+        }
+        
+        for lowercase_key, uppercase_key in key_mappings.items():
+            if lowercase_key in row:
+                normalized[uppercase_key] = row[lowercase_key]
+        
+        # Add 'id' field mapping to anumber for API compatibility
+        if 'anumber' in row:
+            normalized['id'] = row['anumber']
+        elif 'ANUMBER' in row:
+            normalized['id'] = row['ANUMBER']
+            
+        return normalized
+    
+    def execute_query_to_dataframe(self, query: str, params: Optional[Dict] = None) -> pd.DataFrame:
+        """Execute a query and return results as pandas DataFrame"""
+        try:
+            engine = self._get_engine()
+            return pd.read_sql(query, engine, params=params)
+        except Exception as e:
+            logger.error(f"Query to DataFrame failed: {e}")
+            raise
+    
+    def create_tables(self):
+        """Create the required tables for geological data"""
+        
+        # SQL for creating tables with GEOGRAPHY support (no indexes for now)
+        create_tables_sql = """
+        -- Create main geological reports table
+        CREATE TABLE IF NOT EXISTS GEOLOGICAL_REPORTS (
+            ANUMBER INTEGER PRIMARY KEY,
+            TITLE STRING,
+            REPORT_YEAR FLOAT,
+            AUTHOR_NAME STRING,
+            AUTHOR_COMPANY STRING,
+            REPORT_TYPE STRING,
+            DATE_FROM TIMESTAMP,
+            DATE_TO TIMESTAMP,
+            PROJECT STRING,
+            OPERATOR STRING,
+            ABSTRACT STRING,
+            KEYWORDS STRING,
+            TARGET_COMMODITIES STRING,
+            DATE_RELEASED TIMESTAMP,
+            ITEM_NO FLOAT,
+            DPXE_ABS STRING,
+            DPXE_REP STRING,
+            EXTRACT_DATE TIMESTAMP,
+            DIGITAL_FI INTEGER,
+            IS_SHAPED INTEGER,
+            GEOMETRY GEOGRAPHY,
+            CREATED_AT TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UPDATED_AT TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        
+        -- Create metadata summary table
+        CREATE TABLE IF NOT EXISTS REPORT_METADATA (
+            REPORT_ID INTEGER,
+            METADATA_TEXT STRING,
+            EMBEDDING_VECTOR VECTOR(FLOAT, 1536),
+            CREATED_AT TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        """
+        
+        try:
+            with self.get_connection() as conn:
+                # Execute each statement separately
+                statements = create_tables_sql.split(';')
+                for statement in statements:
+                    statement = statement.strip()
+                    if statement:
+                        conn.execute(text(statement))
+                        
+            logger.info("Successfully created/verified all tables")
+        except Exception as e:
+            logger.error(f"Failed to create tables: {e}")
+            raise
+    
+    def load_shapefile_data(self, shapefile_path: str) -> int:
+        """Load data from shapefile into Snowflake"""
+        try:
+            # Load shapefile with GeoPandas
+            logger.info(f"Loading shapefile: {shapefile_path}")
+            gdf = gpd.read_file(shapefile_path)
+            
+            # Convert geometry to WKT for Snowflake, handling null geometries
+            def safe_geometry_to_wkt(geom):
+                """Safely convert geometry to WKT, handling None values"""
+                if geom is None or pd.isna(geom):
+                    return None
+                try:
+                    return geom.wkt
+                except Exception:
+                    return None
+            
+            gdf['geometry_wkt'] = gdf['geometry'].apply(safe_geometry_to_wkt)
+            
+            # Prepare DataFrame for Snowflake
+            df = pd.DataFrame(gdf.drop('geometry', axis=1))
+            
+            # Rename columns to match Snowflake schema
+            column_mapping = {
+                'ANUMBER': 'ANUMBER',
+                'TITLE': 'TITLE', 
+                'REPORT_YEA': 'REPORT_YEAR',
+                'AUTHOR_NAM': 'AUTHOR_NAME',
+                'AUTHOR_COM': 'AUTHOR_COMPANY',
+                'REPORT_TYP': 'REPORT_TYPE',
+                'DATE_FROM': 'DATE_FROM',
+                'DATE_TO': 'DATE_TO',
+                'PROJECT': 'PROJECT',
+                'OPERATOR': 'OPERATOR',
+                'ABSTRACT': 'ABSTRACT',
+                'KEYWORDS': 'KEYWORDS',
+                'TARGET_COM': 'TARGET_COMMODITIES',
+                'DATE_RELEA': 'DATE_RELEASED',
+                'ITEM_NO': 'ITEM_NO',
+                'DPXE_ABS': 'DPXE_ABS',
+                'DPXE_REP': 'DPXE_REP',
+                'EXTRACT_DA': 'EXTRACT_DATE',
+                'DIGITAL_FI': 'DIGITAL_FI',
+                'IS_SHAPED': 'IS_SHAPED',
+                'geometry_wkt': 'GEOMETRY'
+            }
+            
+            df = df.rename(columns=column_mapping)
+            
+            # Log data quality info
+            total_records = len(df)
+            null_geometry_count = df['GEOMETRY'].isnull().sum()
+            valid_geometry_count = total_records - null_geometry_count
+            
+            logger.info(f"Data quality summary:")
+            logger.info(f"  Total records: {total_records}")
+            logger.info(f"  Valid geometries: {valid_geometry_count}")
+            logger.info(f"  Null geometries: {null_geometry_count}")
+            
+            # Verify table exists before loading
+            with self.get_connection() as conn:
+                result = conn.execute(text("SHOW TABLES LIKE 'GEOLOGICAL_REPORTS'"))
+                tables = result.fetchall()
+                if not tables:
+                    logger.error("GEOLOGICAL_REPORTS table does not exist. Creating tables first...")
+                    self.create_tables()
+            
+            # Clear existing data (since we're doing a fresh load)
+            logger.info("Clearing existing data from GEOLOGICAL_REPORTS table...")
+            with self.get_connection() as conn:
+                conn.execute(text("TRUNCATE TABLE GEOLOGICAL_REPORTS"))
+            
+            # Load data to Snowflake using pandas (with explicit method)
+            logger.info("Loading data to Snowflake...")
+            engine = self._get_engine()
+            
+            df.to_sql(
+                'GEOLOGICAL_REPORTS', 
+                engine, 
+                if_exists='append',  # Changed from 'replace' to 'append' since table exists
+                index=False,
+                method='multi',
+                chunksize=1000
+            )
+            
+            logger.info(f"Successfully loaded {total_records} records to Snowflake")
+            return total_records
+            
+        except Exception as e:
+            logger.error(f"Failed to load shapefile data: {e}")
+            raise
+    
+    def get_reports(self, limit: int = 10, offset: int = 0) -> List[Dict[str, Any]]:
+        """Get geological reports with pagination"""
+        query = """
+        SELECT ANUMBER, TITLE, REPORT_YEAR, AUTHOR_COMPANY, OPERATOR, 
+               TARGET_COMMODITIES, PROJECT, GEOMETRY
+        FROM GEOLOGICAL_REPORTS
+        ORDER BY ANUMBER
+        LIMIT :limit OFFSET :offset
+        """
+        return self.execute_query(query, {"limit": limit, "offset": offset})
+    
+    def get_report_by_id(self, report_id: int) -> Optional[Dict[str, Any]]:
+        """Get a specific report by ID"""
+        query = """
+        SELECT * FROM GEOLOGICAL_REPORTS 
+        WHERE ANUMBER = :report_id
+        """
+        results = self.execute_query(query, {"report_id": report_id})
+        return results[0] if results else None
+    
+    def filter_reports(self, commodity: Optional[str] = None, 
+                      year: Optional[int] = None,
+                      company: Optional[str] = None,
+                      limit: int = 100) -> List[Dict[str, Any]]:
+        """Filter reports by various criteria"""
+        conditions = []
+        params = {}
+        
+        if commodity:
+            conditions.append("TARGET_COMMODITIES ILIKE :commodity")
+            params["commodity"] = f"%{commodity}%"
+        
+        if year:
+            conditions.append("REPORT_YEAR = :year")
+            params["year"] = year
+        
+        if company:
+            conditions.append("OPERATOR ILIKE :company")
+            params["company"] = f"%{company}%"
+        
+        where_clause = " AND ".join(conditions) if conditions else "1=1"
+        
+        query = f"""
+        SELECT ANUMBER, TITLE, REPORT_YEAR, AUTHOR_COMPANY, OPERATOR,
+               TARGET_COMMODITIES, PROJECT, GEOMETRY
+        FROM GEOLOGICAL_REPORTS
+        WHERE {where_clause}
+        ORDER BY ANUMBER
+        LIMIT :limit
+        """
+        params["limit"] = limit
+        return self.execute_query(query, params)
+    
+    def spatial_query(self, latitude: float, longitude: float, 
+                     radius_km: float = 10.0) -> List[Dict[str, Any]]:
+        """Perform spatial query to find reports near a location"""
+        query = """
+        SELECT ANUMBER, TITLE, REPORT_YEAR, OPERATOR, TARGET_COMMODITIES,
+               ST_DISTANCE(
+                   GEOMETRY, 
+                   ST_POINT(:longitude, :latitude)
+               ) / 1000 as DISTANCE_KM,
+               GEOMETRY
+        FROM GEOLOGICAL_REPORTS
+        WHERE ST_DWITHIN(
+            GEOMETRY, 
+            ST_POINT(:longitude, :latitude), 
+            :radius_meters
+        )
+        ORDER BY DISTANCE_KM
+        LIMIT 50
+        """
+        
+        params = {
+            "latitude": latitude,
+            "longitude": longitude, 
+            "radius_meters": radius_km * 1000  # Convert km to meters
+        }
+        
+        return self.execute_query(query, params)
+    
+    def get_data_quality_metrics(self) -> Dict[str, Any]:
+        """Get data quality metrics for the geological reports"""
+        query = """
+        SELECT 
+            COUNT(*) as total_records,
+            COUNT(DISTINCT OPERATOR) as unique_operators,
+            COUNT(DISTINCT TARGET_COMMODITIES) as unique_commodities,
+            MIN(REPORT_YEAR) as earliest_year,
+            MAX(REPORT_YEAR) as latest_year,
+            COUNT(CASE WHEN GEOMETRY IS NOT NULL THEN 1 END) as records_with_geometry,
+            CURRENT_TIMESTAMP as last_updated
+        FROM GEOLOGICAL_REPORTS
+        """
+        
+        result = self.execute_query(query)
+        return result[0] if result else {}
+
+# Global client instance
+snowflake_client = SnowflakeClient() 
