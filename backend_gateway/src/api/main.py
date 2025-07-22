@@ -7,13 +7,19 @@ from typing import Dict, Any
 from ..core.config import settings
 from ..core.auth import authenticate_user, create_access_token, get_current_user, get_user_profile
 from ..services import data_client, cortex_client
+from ..services.chat_service import chat_service
+from ..models.chat import ChatMessage
 from ..models import (
     LoginRequest, LoginResponse, UserProfile,
     GeologicalQueryRequest, GeologicalQueryResponse,
     ChatRequest, ChatResponse,
     SpatialQueryRequest, SpatialQueryResponse,
     QualityMetricsResponse, HealthResponse,
-    RefreshTokenRequest
+    RefreshTokenRequest,
+    # New chat history models
+    CreateChatRequest, ChatMessageRequest,
+    ChatSessionResponse, ChatListResponse, 
+    ChatDetailResponse, EnhancedChatResponse
 )
 
 # Create FastAPI app
@@ -129,20 +135,49 @@ async def geological_query(request: GeologicalQueryRequest, current_user: dict =
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Query processing failed: {str(e)}")
 
-# Chat endpoint (maps to Module 2 RAG-query)
-@app.post("/api/backend/chat", response_model=ChatResponse)
-async def chat(request: ChatRequest, current_user: dict = Depends(get_current_user)):
-    """AI chat functionality using Module 2 RAG system"""
+# Enhanced chat endpoint with history support
+@app.post("/api/backend/chat", response_model=EnhancedChatResponse)
+async def chat(request: ChatMessageRequest, current_user: dict = Depends(get_current_user)):
+    """Enhanced chat with history support and context awareness"""
     try:
-        # Direct pass-through to Module 2: POST /rag-query (this IS the chat functionality)
-        ai_response = await cortex_client.rag_query(request.message)
+        user_id = current_user["username"]
         
-        return ChatResponse(
-            response=ai_response.get("result", "No response available"),
-            conversation_id=request.conversation_id or "default",
-            timestamp=datetime.utcnow(),
-            sources=[]  # Could be enhanced with report sources from Module 2 response
+        # Get chat history for context
+        history = await chat_service.get_chat_history(user_id, request.chat_id)
+        if not history:
+            raise HTTPException(status_code=404, detail="Chat not found")
+        
+        # Add user message to history
+        user_message = ChatMessage(role="user", content=request.message)
+        await chat_service.add_message(user_id, request.chat_id, user_message)
+        
+        # Build context if requested
+        query = request.message
+        context_count = 0
+        if request.include_context and history.messages:
+            context = chat_service.build_context(history.messages)
+            if context:
+                query = context + f"Current question: {request.message}"
+                context_count = min(len(history.messages), settings.max_context_messages)
+        
+        # Get AI response from Module 2
+        ai_response = await cortex_client.rag_query(query)
+        response_text = ai_response.get("result", "No response available")
+        
+        # Add assistant response to history
+        assistant_message = ChatMessage(role="assistant", content=response_text)
+        await chat_service.add_message(user_id, request.chat_id, assistant_message)
+        
+        return EnhancedChatResponse(
+            message_id=assistant_message.message_id,
+            response=response_text,
+            chat_id=request.chat_id,
+            timestamp=assistant_message.timestamp,
+            context_messages_used=context_count
         )
+        
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Chat processing failed: {str(e)}")
 
@@ -230,6 +265,78 @@ async def spatial_query(request: SpatialQueryRequest, current_user: dict = Depen
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Spatial query failed: {str(e)}")
+
+# ===== NEW CHAT HISTORY ENDPOINTS =====
+
+@app.post("/api/backend/chats", response_model=ChatSessionResponse)
+async def create_chat(request: CreateChatRequest, current_user: dict = Depends(get_current_user)):
+    """Create a new chat session"""
+    try:
+        chat = await chat_service.create_chat(
+            user_id=current_user["username"],
+            title=request.title,
+            first_message=request.first_message
+        )
+        return ChatSessionResponse(
+            chat_id=chat.chat_id,
+            title=chat.title,
+            message_count=chat.message_count,
+            created_at=chat.created_at,
+            updated_at=chat.updated_at
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/backend/chats", response_model=ChatListResponse)
+async def list_chats(current_user: dict = Depends(get_current_user)):
+    """List user's chat sessions"""
+    try:
+        chats = await chat_service.list_user_chats(current_user["username"])
+        chat_responses = [
+            ChatSessionResponse(
+                chat_id=chat.chat_id,
+                title=chat.title,
+                message_count=chat.message_count,
+                created_at=chat.created_at,
+                updated_at=chat.updated_at
+            )
+            for chat in chats
+        ]
+        return ChatListResponse(chats=chat_responses, total=len(chat_responses))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/backend/chats/{chat_id}", response_model=ChatDetailResponse)
+async def get_chat(chat_id: str, current_user: dict = Depends(get_current_user)):
+    """Get chat details with message history"""
+    try:
+        history = await chat_service.get_chat_history(current_user["username"], chat_id)
+        if not history:
+            raise HTTPException(status_code=404, detail="Chat not found")
+        
+        return ChatDetailResponse(
+            session=ChatSessionResponse(
+                chat_id=history.session.chat_id,
+                title=history.session.title,
+                message_count=history.session.message_count,
+                created_at=history.session.created_at,
+                updated_at=history.session.updated_at
+            ),
+            messages=[msg.dict() for msg in history.messages]
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/api/backend/chats/{chat_id}")
+async def delete_chat(chat_id: str, current_user: dict = Depends(get_current_user)):
+    """Delete a chat session"""
+    try:
+        await chat_service.delete_chat(current_user["username"], chat_id)
+        return {"message": "Chat deleted successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     import uvicorn

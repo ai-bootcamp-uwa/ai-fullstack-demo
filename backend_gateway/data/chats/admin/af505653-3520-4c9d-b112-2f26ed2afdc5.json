@@ -1,0 +1,144 @@
+{
+  "session": {
+    "chat_id": "af505653-3520-4c9d-b112-2f26ed2afdc5",
+    "user_id": "admin",
+    "title": "Simple Context Test",
+    "created_at": "2025-07-22 08:10:03.007195",
+    "updated_at": "2025-07-22 08:32:00.623649",
+    "message_count": 22
+  },
+  "messages": [
+    {
+      "message_id": "9507afb3-7827-493e-b1da-37f3838b3a67",
+      "role": "user",
+      "content": "My favorite color is blue",
+      "timestamp": "2025-07-22 08:10:13.610743"
+    },
+    {
+      "message_id": "824e0046-f878-45ca-95fc-63a1e87b4881",
+      "role": "assistant",
+      "content": "I'm sorry, but there is no relevant information in the provided context to address your favorite color. If you have questions related to geological samples, mining reports, or exploration data, feel free to ask!",
+      "timestamp": "2025-07-22 08:10:17.314491"
+    },
+    {
+      "message_id": "48791fd5-133b-4af2-b519-1a485f2d6590",
+      "role": "user",
+      "content": "What is my favorite color?",
+      "timestamp": "2025-07-22 08:10:37.099144"
+    },
+    {
+      "message_id": "a21d5f25-1ef6-4638-adf5-e4bb3b66613c",
+      "role": "assistant",
+      "content": "The context does not contain relevant information about your favorite color. However, based on your previous conversation, your favorite color is blue.",
+      "timestamp": "2025-07-22 08:10:40.173278"
+    },
+    {
+      "message_id": "8bc59936-c083-4ff2-a42d-634d134bf3cf",
+      "role": "user",
+      "content": "Hello, this is my test message!",
+      "timestamp": "2025-07-22 08:20:30.107857"
+    },
+    {
+      "message_id": "edd184d5-8f85-4825-ab9b-60fc977d634b",
+      "role": "assistant",
+      "content": "I'm sorry, but there is no relevant information in the provided context to address your test message. If you have questions related to geological samples, mining reports, or exploration data, feel free to ask!",
+      "timestamp": "2025-07-22 08:20:33.061529"
+    },
+    {
+      "message_id": "5d639e9d-5cee-4b0d-ad5d-1086fe5fbfc8",
+      "role": "user",
+      "content": "How many rows talking about copper is there in the database?",
+      "timestamp": "2025-07-22 08:21:12.586565"
+    },
+    {
+      "message_id": "0ef6aeba-d7cd-4424-983b-5646d2104da6",
+      "role": "assistant",
+      "content": "The context provided does not contain any relevant information about the number of rows discussing copper in the database. Therefore, I am unable to answer your question. If you have specific queries related to geological samples, mining reports, or exploration data, please let me know!",
+      "timestamp": "2025-07-22 08:21:16.151553"
+    },
+    {
+      "message_id": "6b155830-ec30-4e7f-8df9-155b1d40c2f1",
+      "role": "user",
+      "content": "Tell me something interesting about the mining reports",
+      "timestamp": "2025-07-22 08:22:02.382434"
+    },
+    {
+      "message_id": "1897e003-0df3-486e-b11e-cb29bdf1ac04",
+      "role": "assistant",
+      "content": "The context does not contain relevant information about mining reports. If you have specific questions or topics related to geological samples, mining reports, or exploration data, please ask!",
+      "timestamp": "2025-07-22 08:22:05.318414"
+    },
+    {
+      "message_id": "4d751be1-1bcf-4eda-ab33-112a2402bb8e",
+      "role": "user",
+      "content": "What can you tell me about Wonganoo Project",
+      "timestamp": "2025-07-22 08:23:41.690739"
+    },
+    {
+      "message_id": "00f102bb-97b7-44cb-a225-d052135817a0",
+      "role": "assistant",
+      "content": "The context provided does not contain any relevant information about the Wonganoo Project or mining reports. Therefore, I am unable to answer your question. If you have any other queries related to geological samples, mining reports, or exploration data, please feel free to ask!",
+      "timestamp": "2025-07-22 08:23:45.221728"
+    },
+    {
+      "message_id": "4378cb0f-c95e-4cca-bd3e-23d90107ec31",
+      "role": "user",
+      "content": "What minerals are found in copper exploration projects?",
+      "timestamp": "2025-07-22 08:27:58.693588"
+    },
+    {
+      "message_id": "9cbcf4c2-efd1-40a9-a4c1-17136e600649",
+      "role": "assistant",
+      "content": "Based on the context provided, copper exploration projects typically focus on the target commodities of copper and nickel. Specifically, the Wonganoo Project and the Duketon exploration projects mention both copper and nickel as the key minerals being targeted. If you have further questions or need more specific details, feel free to ask!",
+      "timestamp": "2025-07-22 08:28:02.951984"
+    },
+    {
+      "message_id": "a6749c07-367e-4747-ae58-9b9f4b718661",
+      "role": "user",
+      "content": "What can you tell me about Wonganoo Project",
+      "timestamp": "2025-07-22 08:28:19.142101"
+    },
+    {
+      "message_id": "4352cb65-2e0a-4868-8b7b-d653b335d0e5",
+      "role": "assistant",
+      "content": "The Wonganoo Project focuses on nickel-copper exploration and includes various geological and geochemical activities such as soil sampling, geological mapping, geophysics, and ground magnetic surveys. The project emphasizes surface geochemistry and is targeting battery metals, specifically copper and nickel. This suggests that the project is aimed at identifying and assessing deposits of these valuable metals, which are important for various industrial applications, including electric vehicle batteries. If you have more specific questions about the project or related topics, feel free to ask!",
+      "timestamp": "2025-07-22 08:28:25.849910"
+    },
+    {
+      "message_id": "8a2871f0-40a3-4cc4-add6-34c85bc70658",
+      "role": "user",
+      "content": "Who was the operator of this project?",
+      "timestamp": "2025-07-22 08:29:29.945533"
+    },
+    {
+      "message_id": "d5871109-1d65-4f6b-92d0-6fa31d17d133",
+      "role": "assistant",
+      "content": "The context provided does not contain any information about the operator of the Wonganoo Project. Therefore, I am unable to answer your question regarding the operator. If you have any other queries related to geological samples, mining reports, or exploration data, please feel free to ask!",
+      "timestamp": "2025-07-22 08:29:33.756771"
+    },
+    {
+      "message_id": "f24e60f0-cae6-4377-84b2-42caf1577e81",
+      "role": "user",
+      "content": "Can you tell me something about the geometry of this project?",
+      "timestamp": "2025-07-22 08:30:33.817024"
+    },
+    {
+      "message_id": "f7615fe0-6f87-4d8d-8bac-20c36d585748",
+      "role": "assistant",
+      "content": "The context provided does not contain specific information about the geometry of the Wonganoo Project. It primarily discusses the exploration activities and target commodities, but it does not detail any geometric aspects, such as the shape, structure, or spatial arrangement of the geological formations being studied. If you have further questions or need information on another topic, please let me know!",
+      "timestamp": "2025-07-22 08:30:37.173589"
+    },
+    {
+      "message_id": "743844fa-91c5-4955-8dad-4a77aba424a3",
+      "role": "user",
+      "content": "What kinds of metals were the focus of this project?",
+      "timestamp": "2025-07-22 08:31:56.753911"
+    },
+    {
+      "message_id": "c60b67e1-a1ea-4c52-b324-d9e1a71067ff",
+      "role": "assistant",
+      "content": "The focus of the Wonganoo Project is on battery metals, specifically copper and nickel. These metals are targeted due to their importance in various industrial applications, including electric vehicle batteries. If you have more questions or need further information, feel free to ask!",
+      "timestamp": "2025-07-22 08:32:00.620002"
+    }
+  ]
+}

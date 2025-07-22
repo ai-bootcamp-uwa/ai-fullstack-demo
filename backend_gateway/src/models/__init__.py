@@ -5,7 +5,10 @@ from .requests import (
     GeologicalQueryRequest,
     ChatRequest,
     SpatialQueryRequest,
-    RefreshTokenRequest
+    RefreshTokenRequest,
+    # New chat history requests
+    CreateChatRequest,
+    ChatMessageRequest
 )
 
 from .responses import (
@@ -15,7 +18,18 @@ from .responses import (
     ChatResponse,
     SpatialQueryResponse,
     QualityMetricsResponse,
-    HealthResponse
+    HealthResponse,
+    # New chat history responses
+    ChatSessionResponse,
+    ChatListResponse,
+    ChatDetailResponse,
+    EnhancedChatResponse
+)
+
+from .chat import (
+    ChatSession,
+    ChatMessage,
+    ChatHistory
 )
 
 __all__ = [
@@ -25,6 +39,8 @@ __all__ = [
     "ChatRequest",
     "SpatialQueryRequest",
     "RefreshTokenRequest",
+    "CreateChatRequest",
+    "ChatMessageRequest",
     # Response models
     "LoginResponse",
     "UserProfile",
@@ -32,5 +48,13 @@ __all__ = [
     "ChatResponse",
     "SpatialQueryResponse",
     "QualityMetricsResponse",
-    "HealthResponse"
+    "HealthResponse",
+    "ChatSessionResponse",
+    "ChatListResponse", 
+    "ChatDetailResponse",
+    "EnhancedChatResponse",
+    # Chat data models
+    "ChatSession",
+    "ChatMessage",
+    "ChatHistory"
 ] 

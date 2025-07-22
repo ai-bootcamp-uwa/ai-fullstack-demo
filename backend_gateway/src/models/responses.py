@@ -60,4 +60,31 @@ class ErrorResponse(BaseModel):
     """Error response model."""
     error: str
     message: str
-    timestamp: datetime 
+    timestamp: datetime
+
+# New chat history response models
+class ChatSessionResponse(BaseModel):
+    """Response for chat session information."""
+    chat_id: str
+    title: str
+    message_count: int
+    created_at: datetime
+    updated_at: datetime
+
+class ChatListResponse(BaseModel):
+    """Response for listing user's chat sessions."""
+    chats: List[ChatSessionResponse]
+    total: int
+
+class ChatDetailResponse(BaseModel):
+    """Response for detailed chat history with messages."""
+    session: ChatSessionResponse
+    messages: List[Dict[str, Any]]  # Will contain ChatMessage data
+
+class EnhancedChatResponse(BaseModel):
+    """Response for enhanced chat with history context."""
+    message_id: str
+    response: str
+    chat_id: str
+    timestamp: datetime
+    context_messages_used: int  # How many previous messages included 

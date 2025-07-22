@@ -31,4 +31,16 @@ class RefreshTokenRequest(BaseModel):
 
 class TokenData(BaseModel):
     """JWT token data model."""
-    username: Optional[str] = None 
+    username: Optional[str] = None
+
+# New chat history request models
+class CreateChatRequest(BaseModel):
+    """Request to create a new chat session."""
+    title: str
+    first_message: Optional[str] = None
+
+class ChatMessageRequest(BaseModel):
+    """Request to send a message to an existing chat."""
+    chat_id: str
+    message: str
+    include_context: bool = True  # Simple on/off for context 

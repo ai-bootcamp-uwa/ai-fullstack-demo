@@ -11,7 +11,7 @@ class CortexEngineClient:
 
     async def health_check(self):
         """Check health using actual Module 2 endpoint: GET /health"""
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=10.0) as client:
             try:
                 response = await client.get(f"{self.base_url}/health")
                 response.raise_for_status()
@@ -23,7 +23,7 @@ class CortexEngineClient:
 
     async def get_config(self):
         """Get config using actual Module 2 endpoint: GET /config"""
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=10.0) as client:
             try:
                 response = await client.get(f"{self.base_url}/config")
                 response.raise_for_status()
@@ -35,7 +35,7 @@ class CortexEngineClient:
 
     async def generate_embeddings(self, data: List[str]):
         """Generate embeddings using actual Module 2 endpoint: POST /embed"""
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=30.0) as client:
             try:
                 response = await client.post(
                     f"{self.base_url}/embed",
@@ -50,7 +50,7 @@ class CortexEngineClient:
 
     async def rag_query(self, query: str):
         """RAG query using actual Module 2 endpoint: POST /rag-query (this IS the chat functionality)"""
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=30.0) as client:
             try:
                 response = await client.post(
                     f"{self.base_url}/rag-query",
@@ -58,6 +58,8 @@ class CortexEngineClient:
                 )
                 response.raise_for_status()
                 return response.json()
+            except httpx.TimeoutException as e:
+                raise Exception(f"Cortex Engine timeout: {e}")
             except httpx.RequestError as e:
                 raise Exception(f"Cortex Engine service unavailable: {e}")
             except httpx.HTTPStatusError as e:
@@ -65,7 +67,7 @@ class CortexEngineClient:
 
     async def similarity_search(self, query_vector: List[float], top_k: int = 5):
         """Similarity search using actual Module 2 endpoint: POST /similarity-search"""
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=30.0) as client:
             try:
                 response = await client.post(
                     f"{self.base_url}/similarity-search",

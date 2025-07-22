@@ -1,0 +1,30 @@
+{
+  "session": {
+    "chat_id": "6eee892e-c5a9-409b-bb29-a7e52a7e626b",
+    "user_id": "admin",
+    "title": "Context Awareness Test",
+    "created_at": "2025-07-22 08:03:18.706964",
+    "updated_at": "2025-07-22 08:03:47.968044",
+    "message_count": 3
+  },
+  "messages": [
+    {
+      "message_id": "e31125d8-13e3-424f-b4ec-85b6bd5d7055",
+      "role": "user",
+      "content": "Tell me about copper mining in Western Australia",
+      "timestamp": "2025-07-22 08:03:18.708750"
+    },
+    {
+      "message_id": "949d4fb9-a7a5-41e8-8e46-350622527190",
+      "role": "user",
+      "content": "Tell me about copper mining in Western Australia",
+      "timestamp": "2025-07-22 08:03:31.895307"
+    },
+    {
+      "message_id": "f6401585-597b-43e0-bcbe-f1cd8712c2b1",
+      "role": "user",
+      "content": "Tell me about copper mining in Western Australia",
+      "timestamp": "2025-07-22 08:03:47.967719"
+    }
+  ]
+}
