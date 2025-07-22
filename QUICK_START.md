@@ -75,6 +75,37 @@ python scripts/migrate_to_snowflake.py --setup-only
 
 > **Note:** By default, only the first 1000 records from your dataset will be uploaded to Snowflake for cost and speed optimization. Use the `--max-records` parameter to change this limit as needed.
 
+### 4. How to Export Terminal Output to a File
+
+When running migration or any command, you can save all terminal output (including logs and errors) to a file for documentation or debugging:
+
+- **Redirect output to a file:**
+
+  ```bash
+  python scripts/migrate_to_snowflake.py > migration_log.txt 2>&1
+  ```
+
+  This saves all output (including errors) to `migration_log.txt`.
+
+- **View and save output at the same time:**
+
+  ```bash
+  python scripts/migrate_to_snowflake.py | tee migration_log.txt
+  ```
+
+  This displays output in the terminal and saves it to the file.
+
+- **Copy and paste:**
+
+  - You can also select text in your terminal, copy, and paste it into a `.txt`, `.md`, or `.docx` file using your favorite editor.
+
+- **Edit or share:**
+  - Open the file in VS Code, Word, or any editor to format, annotate, or share as needed.
+
+> Saving logs is useful for troubleshooting, sharing with your team, or keeping a record of your migration and test results.
+
+---
+
 ### 4. How to Test with curl (Module 1: Data Foundation)
 
 After running the migration and starting the FastAPI server, you can test your API endpoints with the following curl commands:

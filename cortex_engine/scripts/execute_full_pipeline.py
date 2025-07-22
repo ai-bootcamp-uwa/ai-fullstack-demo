@@ -2,7 +2,6 @@
 """
 Cortex Engine Full Pipeline Execution Script
 Automates the complete geological data processing workflow with cost optimization.
-Limited to 10 reports to minimize Azure OpenAI costs.
 """
 
 import asyncio
@@ -12,6 +11,7 @@ import time
 import sys
 import os
 from typing import Dict, List, Any
+import argparse
 
 # Add the cortex_engine src directory to the path
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src'))
@@ -21,13 +21,14 @@ from data_client import DataFoundationClient
 # Configuration
 DATA_FOUNDATION_URL = "http://localhost:8000"
 CORTEX_ENGINE_URL = "http://localhost:3002"
-MAX_REPORTS = 10  # Cost optimization limit
+# Remove hardcoded MAX_REPORTS
+# MAX_REPORTS = 10  # Cost optimization limit
 
 
 class FullPipelineExecutor:
     """Executes the complete Cortex Engine pipeline."""
 
-    def __init__(self):
+    def __init__(self, max_reports=None):
         self.start_time = time.time()
         self.metrics = {
             "total_reports_processed": 0,
@@ -36,12 +37,13 @@ class FullPipelineExecutor:
             "rag_queries": 0,
             "total_cost_estimate": 0.0
         }
+        self.max_reports = max_reports
 
     def print_banner(self):
         """Print the execution banner."""
-        print("🚀 CORTEX ENGINE FULL PIPELINE EXECUTION")
+        print("�� CORTEX ENGINE FULL PIPELINE EXECUTION")
         print("=" * 60)
-        print(f"💰 Cost-Optimized: Limited to {MAX_REPORTS} reports")
+        print(f"💰 Cost-Optimized: Limited to {self.max_reports} reports" if self.max_reports is not None else "💰 Cost-Optimized: Processing all reports")
         print(f"🌐 Data Source: {DATA_FOUNDATION_URL}")
         print(f"🤖 AI Engine: {CORTEX_ENGINE_URL}")
         print(f"⏰ Started: {time.strftime('%Y-%m-%d %H:%M:%S')}")
@@ -94,9 +96,9 @@ class FullPipelineExecutor:
         try:
             client = DataFoundationClient(DATA_FOUNDATION_URL)
 
-            self.print_step("Fetching reports", f"limit={MAX_REPORTS} (cost optimization)")
+            self.print_step("Fetching reports", f"limit={self.max_reports if self.max_reports is not None else 'all'}")
             start_time = time.time()
-            reports = await client.fetch_reports(limit=MAX_REPORTS)
+            reports = await client.fetch_reports(limit=self.max_reports if self.max_reports is not None else 1000000)
             fetch_time = time.time() - start_time
 
             self.metrics["total_reports_processed"] = len(reports)
@@ -335,7 +337,7 @@ class FullPipelineExecutor:
         print(f"\n💰 Cost Analysis:")
         print(f"   • Estimated Azure OpenAI Cost: ${self.metrics['total_cost_estimate']:.6f}")
         print(f"   • Cost per report: ${self.metrics['total_cost_estimate']/max(1, self.metrics['total_reports_processed']):.6f}")
-        print(f"   • Cost optimization: ✅ Limited to {MAX_REPORTS} reports")
+        print(f"   • Cost optimization: ✅ Limited to {self.max_reports} reports" if self.max_reports is not None else "💰 Cost optimization: Processing all reports")
 
         # Performance targets
         print(f"\n🎯 Performance Targets:")
@@ -374,7 +376,7 @@ class FullPipelineExecutor:
         print(f"💰 Total Cost: ${self.metrics['total_cost_estimate']:.6f}")
         print(f"📊 Success Rate: {self.calculate_success_rate():.1f}%")
 
-        if self.metrics['total_reports_processed'] >= MAX_REPORTS:
+        if self.metrics['total_reports_processed'] >= (self.max_reports if self.max_reports is not None else 10):
             print("✅ EXECUTION STATUS: SUCCESS")
         else:
             print("⚠️ EXECUTION STATUS: PARTIAL SUCCESS")
@@ -397,33 +399,32 @@ class FullPipelineExecutor:
 
         return (successful_operations / total_operations) * 100
 
+    def run(self):
+        self.print_banner()
 
-async def main():
-    """Execute the complete Cortex Engine pipeline."""
-    executor = FullPipelineExecutor()
+        # Check system health
+        if not self.check_system_health():
+            print("\n🚨 System health check failed. Cannot proceed with pipeline execution.")
+            return
 
-    # Start execution
-    executor.print_banner()
+        # Execute pipeline stages
+        reports = asyncio.run(self.fetch_geological_data())
 
-    # Check system health
-    if not executor.check_system_health():
-        print("\n🚨 System health check failed. Cannot proceed with pipeline execution.")
-        return
+        embeddings = self.generate_embeddings(reports)
 
-    # Execute pipeline stages
-    reports = await executor.fetch_geological_data()
+        self.perform_similarity_analysis(embeddings)
 
-    embeddings = executor.generate_embeddings(reports)
+        self.test_rag_capabilities()
 
-    executor.perform_similarity_analysis(embeddings)
+        # Generate reports
+        self.generate_performance_report()
 
-    executor.test_rag_capabilities()
-
-    # Generate reports
-    executor.generate_performance_report()
-
-    executor.print_completion_banner()
+        self.print_completion_banner()
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    parser = argparse.ArgumentParser(description="Cortex Engine Full Pipeline Execution")
+    parser.add_argument("--max-reports", type=int, default=None, help="Maximum number of reports to process (default: all)")
+    args = parser.parse_args()
+    executor = FullPipelineExecutor(max_reports=args.max_reports)
+    executor.run()

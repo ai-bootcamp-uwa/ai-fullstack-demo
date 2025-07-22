@@ -298,14 +298,30 @@ class SnowflakeClient:
             logger.info("Loading data to Snowflake...")
             engine = self._get_engine()
 
-            df.to_sql(
-                'GEOLOGICAL_REPORTS',
-                engine,
-                if_exists='append',  # Changed from 'replace' to 'append' since table exists
-                index=False,
-                method='multi',
-                chunksize=100  # Reduced from 1000 to 100 for large uploads
-            )
+            uploaded_records = 0
+            chunk_size = 25
+            num_chunks = (total_records + chunk_size - 1) // chunk_size
+            logger.info(f"Starting upload: {total_records} records in {num_chunks} chunks of {chunk_size}.")
+            for i in range(0, total_records, chunk_size):
+                chunk_start = i
+                chunk_end = min(i + chunk_size, total_records)
+                chunk_df = df.iloc[chunk_start:chunk_end]
+                chunk_num = (i // chunk_size) + 1
+                percent = (chunk_end / total_records) * 100
+                logger.info(f"Uploading chunk {chunk_num}/{num_chunks}: records {chunk_start+1}-{chunk_end} ({percent:.1f}% complete)")
+                try:
+                    chunk_df.to_sql(
+                        'GEOLOGICAL_REPORTS',
+                        engine,
+                        if_exists='append',
+                        index=False,
+                        method='multi',
+                        chunksize=chunk_size
+                    )
+                    uploaded_records += len(chunk_df)
+                except Exception as e:
+                    logger.warning(f"Chunk {chunk_num} failed: {e}. Continuing with next chunk.")
+            logger.info(f"Upload complete: {uploaded_records}/{total_records} records uploaded.")
 
             logger.info(f"Successfully loaded {total_records} records to Snowflake")
             return total_records
