@@ -4,13 +4,12 @@ A geospatial data foundation for the Western Australian Mineral Exploration Repo
 
 ## 🎯 Overview
 
-This project implements a modern data foundation for geological exploration data with:
+This project implements a modern, **cloud-native** data foundation for geological exploration data with:
 
-- **Snowflake Integration**: Cloud-native data warehouse with geospatial capabilities
+- **Snowflake Integration**: Cloud-native data warehouse with geospatial capabilities (**required**)
 - **FastAPI REST API**: High-performance API endpoints for data access
-- **GeoPandas Processing**: Advanced geospatial data handling
 - **ETL Pipeline**: Automated data migration from shapefiles to Snowflake
-- **Flexible Architecture**: Supports both cloud (Snowflake) and local data sources
+- **Cloud-Only Architecture**: All API and data operations require a working Snowflake connection
 
 ## 🏗️ Architecture
 
@@ -29,23 +28,26 @@ This project implements a modern data foundation for geological exploration data
 ## 📊 Features
 
 ### Data Management
-- **Geospatial Data Loading**: Support for shapefiles, GeoJSON, and other formats
-- **Snowflake Integration**: GEOGRAPHY data types for spatial queries
+
+- **Snowflake Integration**: GEOGRAPHY data types for spatial queries (**required**)
 - **Data Quality Metrics**: Automated validation and monitoring
 - **ETL Pipeline**: Robust data migration with error handling
 
 ### API Capabilities
-- **RESTful Endpoints**: Full CRUD operations for geological reports
+
+- **RESTful Endpoints**: Full CRUD operations for geological reports (Snowflake-backed)
 - **Spatial Queries**: Find reports by location and radius
 - **Advanced Filtering**: Filter by commodity, year, company, and more
 - **Pagination**: Efficient handling of large datasets
 - **Health Monitoring**: Built-in health checks and metrics
 
 ### Deployment Options
+
 - **Cloud-First**: Optimized for Snowflake cloud data warehouse
-- **Local Fallback**: Graceful degradation to local data when needed
 - **Docker Support**: Containerized deployment
 - **Environment Management**: Secure credential handling
+
+> **Note:** Local fallback and file-based data access are no longer supported. A working Snowflake connection is required for all API and data operations.
 
 ## 🚀 Quick Start
 
@@ -53,7 +55,7 @@ This project implements a modern data foundation for geological exploration data
 
 - Python 3.8+
 - Snowflake account with appropriate permissions
-- WAMEX shapefile data
+- WAMEX shapefile data (for initial ETL only)
 
 ### 1. Environment Setup
 
@@ -88,7 +90,7 @@ SNOWFLAKE_SCHEMA=GEOSPATIAL_DATA
 ### 3. Migrate Data to Snowflake
 
 ```bash
-# Run the ETL pipeline
+# Run the ETL pipeline (required for initial data load only)
 python scripts/migrate_to_snowflake.py
 
 # Or with specific shapefile
@@ -101,7 +103,7 @@ python scripts/migrate_to_snowflake.py --setup-only
 ### 4. Start the API Server
 
 ```bash
-# Start the FastAPI server
+# Start the FastAPI server (Snowflake connection required)
 cd src
 python -m api.main
 
@@ -122,32 +124,26 @@ curl http://localhost:8000/reports?limit=5
 curl "http://localhost:8000/spatial-query?latitude=-31.9505&longitude=115.8605&radius_km=50"
 
 # Filter by commodity
-curl "http://localhost:8000/reports/filter?commodity=GOLD"
+curl "http://localhost:8000/filter-reports?commodity=GOLD"
 ```
 
 ## 📚 API Documentation
 
 ### Core Endpoints
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/health` | GET | Health check and system status |
-| `/reports` | GET | List geological reports (paginated) |
-| `/reports/{id}` | GET | Get specific report by ID |
-| `/reports/filter` | GET | Filter reports by criteria |
-| `/spatial-query` | POST | Find reports near location |
-| `/quality-metrics` | GET | Data quality statistics |
-
-### Admin Endpoints
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/admin/setup-tables` | POST | Create Snowflake tables |
-| `/admin/migrate-data` | POST | Migrate shapefile to Snowflake |
+| Endpoint           | Method | Description                         |
+| ------------------ | ------ | ----------------------------------- |
+| `/health`          | GET    | Health check and system status      |
+| `/reports`         | GET    | List geological reports (paginated) |
+| `/reports/{id}`    | GET    | Get specific report by ID           |
+| `/filter-reports`  | GET    | Filter reports by criteria          |
+| `/spatial-query`   | POST   | Find reports near location          |
+| `/quality-metrics` | GET    | Data quality statistics             |
 
 ### Example Responses
 
 **Health Check:**
+
 ```json
 {
   "snowflake_configured": true,
@@ -160,6 +156,7 @@ curl "http://localhost:8000/reports/filter?commodity=GOLD"
 ```
 
 **Spatial Query:**
+
 ```json
 {
   "reports": [
@@ -191,18 +188,13 @@ data_foundation_project/
 │   ├── api/
 │   │   └── main.py              # FastAPI application
 │   ├── config.py                # Configuration management
-│   ├── data_access.py           # Data access layer
+│   ├── data_access.py           # Data access layer (Snowflake-only)
 │   └── snowflake_client.py      # Snowflake operations
 ├── scripts/
-│   ├── migrate_to_snowflake.py  # ETL pipeline
-│   ├── explore_shapefile.py     # Data exploration
-│   ├── load_data.py             # Data loading utilities
-│   └── process_data.py          # Data processing utilities
-├── tests/
-│   └── test_processing.py       # Unit tests
+│   └── migrate_to_snowflake.py  # ETL pipeline
 ├── data/
-│   ├── raw/                     # Original shapefile data
-│   └── processed/               # Processed data outputs
+│   ├── raw/                     # Original shapefile data (for ETL only)
+│   └── processed/               # Processed data outputs (for ETL only)
 ├── docs/                        # Documentation
 ├── requirements.txt             # Python dependencies
 ├── env_template.txt            # Environment variables template
@@ -212,6 +204,7 @@ data_foundation_project/
 ### Database Schema
 
 **GEOLOGICAL_REPORTS Table:**
+
 ```sql
 CREATE TABLE GEOLOGICAL_REPORTS (
     ANUMBER INTEGER PRIMARY KEY,
@@ -236,7 +229,7 @@ from src.config import snowflake_config, app_config
 # Snowflake connection
 if snowflake_config.validate_credentials():
     # Connect to Snowflake
-    
+    ...
 # Application settings
 app.run(host=app_config.api_host, port=app_config.api_port)
 ```
@@ -294,16 +287,19 @@ docker-compose up -d
 ## 🚀 Deployment
 
 ### Local Development
+
 ```bash
 uvicorn src.api.main:app --reload --host localhost --port 8000
 ```
 
 ### Production Deployment
+
 ```bash
 uvicorn src.api.main:app --host 0.0.0.0 --port 8000 --workers 4
 ```
 
 ### Cloud Deployment
+
 - **Azure Container Instances**: Recommended for production
 - **AWS ECS**: Alternative container deployment
 - **Google Cloud Run**: Serverless option
@@ -321,6 +317,7 @@ This module integrates with other components:
 ### Common Issues
 
 **Snowflake Connection Failed:**
+
 ```bash
 # Check credentials
 python scripts/migrate_to_snowflake.py --validate-only
@@ -329,16 +326,8 @@ python scripts/migrate_to_snowflake.py --validate-only
 ping your_account.snowflakecomputing.com
 ```
 
-**Shapefile Loading Errors:**
-```bash
-# Check file permissions
-ls -la data/raw/
-
-# Validate shapefile
-python scripts/explore_shapefile.py
-```
-
 **API Startup Issues:**
+
 ```bash
 # Check port availability
 netstat -an | grep 8000
@@ -350,29 +339,3 @@ pip list | grep fastapi
 ## 📖 Documentation
 
 - [API Documentation](http://localhost:8000/docs) - Interactive API docs
-- [Snowflake Integration Guide](docs/snowflake-setup.md)
-- [Data Processing Guide](docs/data-processing.md)
-- [Deployment Guide](docs/deployment.md)
-
-## 🏷️ Version History
-
-- **v2.0.0**: Snowflake integration, enhanced API, ETL pipeline
-- **v1.0.0**: Basic shapefile processing, initial FastAPI endpoints
-
-## 📄 License
-
-This project is part of the AI Full-Stack Engineer Bootcamp curriculum.
-
-## 🤝 Contributing
-
-1. Follow the established code style
-2. Add tests for new features
-3. Update documentation
-4. Submit pull requests for review
-
-## 📞 Support
-
-For issues and questions:
-- Create GitHub issues for bugs
-- Check documentation for common solutions
-- Contact the development team for urgent issues

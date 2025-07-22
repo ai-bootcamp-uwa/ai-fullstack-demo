@@ -57,6 +57,65 @@ nano .env  # or use your preferred editor
 #           ✅ Chat model test PASSED
 ```
 
+### 3. Migrate Data to Snowflake (Default: 1000 Records)
+
+```bash
+# Run the ETL pipeline (uploads only the first 1000 records by default)
+python scripts/migrate_to_snowflake.py
+
+# To change the number of records uploaded (e.g., 500):
+python scripts/migrate_to_snowflake.py --max-records 500
+
+# Or with specific shapefile
+python scripts/migrate_to_snowflake.py --shapefile /path/to/your/data.shp
+
+# Setup tables only (without data migration)
+python scripts/migrate_to_snowflake.py --setup-only
+```
+
+> **Note:** By default, only the first 1000 records from your dataset will be uploaded to Snowflake for cost and speed optimization. Use the `--max-records` parameter to change this limit as needed.
+
+### 4. How to Test with curl (Module 1: Data Foundation)
+
+After running the migration and starting the FastAPI server, you can test your API endpoints with the following curl commands:
+
+- **Health Check**
+
+  ```bash
+  curl http://localhost:8000/health
+  ```
+
+- **Get Reports (first 5)**
+
+  ```bash
+  curl http://localhost:8000/reports?limit=5
+  ```
+
+- **Get a Specific Report by ID**
+
+  ```bash
+  curl http://localhost:8000/reports/1
+  ```
+
+- **Filter Reports (e.g., by commodity)**
+
+  ```bash
+  curl "http://localhost:8000/filter-reports?commodity=GOLD"
+  ```
+
+- **Spatial Query (example coordinates)**
+
+  ```bash
+  curl -X POST "http://localhost:8000/spatial-query" -H "Content-Type: application/json" -d '{"latitude": -31.9505, "longitude": 115.8605, "radius_km": 50}'
+  ```
+
+- **Data Quality Metrics**
+  ```bash
+  curl http://localhost:8000/quality-metrics
+  ```
+
+> If you see JSON responses with data, your pipeline is working!
+
 ## 🎯 Launch System (3 minutes)
 
 ### Terminal 1: Start Module 1 (Data Foundation)

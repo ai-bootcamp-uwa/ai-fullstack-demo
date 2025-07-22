@@ -1,11 +1,11 @@
 # Snowflake Configuration - Copy to .env and fill in your values
-SNOWFLAKE_ACCOUNT=your_account.region
-SNOWFLAKE_USER=your_username
-SNOWFLAKE_PASSWORD=your_password
+SNOWFLAKE_ACCOUNT=DGTENIK-QX43486
+SNOWFLAKE_USER=DAVID3XU
+SNOWFLAKE_PASSWORD=your_password_here
 SNOWFLAKE_WAREHOUSE=COMPUTE_WH
 SNOWFLAKE_DATABASE=WAMEX_EXPLORATION
 SNOWFLAKE_SCHEMA=GEOSPATIAL_DATA
-SNOWFLAKE_ROLE=DATA_ENGINEER
+SNOWFLAKE_ROLE=ACCOUNTADMIN
 
 # Application Configuration
 DEBUG=true
@@ -20,4 +20,4 @@ BACKEND_GATEWAY_URL=http://localhost:3003
 # Instructions:
 # 1. Copy this file to .env in the same directory
 # 2. Replace the placeholder values with your actual Snowflake credentials
-# 3. The .env file will be ignored by git for security 
+# 3. The .env file will be ignored by git for security
