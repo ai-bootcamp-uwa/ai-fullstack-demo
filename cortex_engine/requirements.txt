@@ -6,3 +6,9 @@ scikit-learn
 pandas
 openai
 python-dotenv
+# Snowflake dependencies for hybrid system
+snowflake-connector-python
+snowflake-sqlalchemy
+sqlalchemy
+# Testing dependencies
+pytest
