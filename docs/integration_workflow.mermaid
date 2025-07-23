@@ -1,0 +1,126 @@
+graph TD
+    %% Existing System Layer
+    subgraph EXISTING["🔧 Existing Cortex Engine"]
+        A[config.py<br/>Current Configuration]
+        B[main.py<br/>Current FastAPI App]
+        C[embedding.py<br/>Current Embeddings]
+        D[vector_store.py<br/>Current Storage]
+        E[similarity.py<br/>Current Search]
+        F[data_client.py<br/>Module 1 Integration]
+    end
+    
+    %% Integration Phase 1
+    subgraph PHASE1["📋 Phase 1: Foundation"]
+        G[config.py +<br/>Snowflake + Azure Config]
+        H[Snowflake Schema<br/>Vector Tables Added]
+        I[Azure OpenAI<br/>Connection Established]
+        J[Health Monitoring<br/>Hybrid Components]
+    end
+    
+    %% Integration Phase 2
+    subgraph PHASE2["⚙️ Phase 2: Core Integration"]
+        K[embedding.py +<br/>Azure OpenAI Functions]
+        L[vector_store.py +<br/>Snowflake Operations]
+        M[similarity.py +<br/>Vector Search Functions]
+        N[title_processor.py<br/>NEW - Text Processing]
+    end
+    
+    %% Integration Phase 3
+    subgraph PHASE3["🔌 Phase 3: API Enhancement"]
+        O[main.py +<br/>Hybrid Endpoints]
+        P[hybrid_models.py<br/>NEW - API Models]
+        Q[Bulk Processing<br/>Title Embeddings]
+        R[Admin Interfaces<br/>System Control]
+    end
+    
+    %% Integration Phase 4
+    subgraph PHASE4["🚀 Phase 4: Production"]
+        S[Error Handling<br/>Comprehensive Coverage]
+        T[Monitoring & Alerting<br/>Production Ready]
+        U[Testing Suite<br/>Automated Coverage]
+        V[Backup & Recovery<br/>Data Protection]
+    end
+    
+    %% Data Flow
+    subgraph DATA["📊 Data Flow"]
+        W[TITLE Field<br/>114k+ Reports]
+        X[Azure Embeddings<br/>1536 Dimensions]
+        Y[Snowflake Storage<br/>Vector Columns]
+        Z[Similarity Search<br/>COSINE_SIMILARITY]
+    end
+    
+    %% User Interface
+    subgraph USER["👤 User Experience"]
+        AA[Existing APIs<br/>Unchanged]
+        BB[New Hybrid APIs<br/>Enhanced Search]
+        CC[Gradual Migration<br/>Feature Flags]
+        DD[Zero Downtime<br/>Seamless Transition]
+    end
+    
+    %% Integration Flow - Phase 1
+    A --> G
+    G --> H
+    G --> I
+    H --> J
+    
+    %% Integration Flow - Phase 2
+    C --> K
+    D --> L
+    E --> M
+    K --> N
+    
+    %% Integration Flow - Phase 3
+    B --> O
+    O --> P
+    P --> Q
+    Q --> R
+    
+    %% Integration Flow - Phase 4
+    R --> S
+    S --> T
+    T --> U
+    U --> V
+    
+    %% Data Processing Flow
+    W --> K
+    K --> X
+    X --> L
+    L --> Y
+    Y --> M
+    M --> Z
+    
+    %% User Experience Flow
+    AA --> CC
+    O --> BB
+    BB --> CC
+    CC --> DD
+    
+    %% Cross-Phase Dependencies
+    I --> K
+    H --> L
+    N --> Q
+    J --> T
+    
+    %% Backward Compatibility
+    G -.-> A
+    O -.-> B
+    K -.-> C
+    L -.-> D
+    M -.-> E
+    
+    %% Styling
+    classDef existingClass fill:#e3f2fd,stroke:#1565c0,stroke-width:2px
+    classDef phase1Class fill:#f1f8e9,stroke:#558b2f,stroke-width:2px
+    classDef phase2Class fill:#fff3e0,stroke:#ef6c00,stroke-width:2px
+    classDef phase3Class fill:#fce4ec,stroke:#c2185b,stroke-width:2px
+    classDef phase4Class fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+    classDef dataClass fill:#e8f5e8,stroke:#2e7d32,stroke-width:2px
+    classDef userClass fill:#e0f2f1,stroke:#00796b,stroke-width:2px
+    
+    class A,B,C,D,E,F existingClass
+    class G,H,I,J phase1Class
+    class K,L,M,N phase2Class
+    class O,P,Q,R phase3Class
+    class S,T,U,V phase4Class
+    class W,X,Y,Z dataClass
+    class AA,BB,CC,DD userClass 

@@ -1,0 +1,96 @@
+graph TD
+    %% Data Source Layer
+    subgraph DATA["📊 Data Foundation Layer"]
+        A[GEOLOGICAL_REPORTS Table<br/>114k+ Records]
+        B[TITLE Field<br/>Report Names & Descriptions]
+        C[Metadata Fields<br/>OPERATOR, TARGET_COMMODITIES, YEAR]
+    end
+    
+    %% Processing Layer
+    subgraph PROCESS["⚙️ Processing Pipeline"]
+        D[Title Text Preprocessing<br/>Clean & Standardize]
+        E[Batch Processing Manager<br/>1000 titles/hour]
+        F[Error Handling & Retry<br/>Robust Pipeline]
+    end
+    
+    %% Azure OpenAI Layer
+    subgraph AZURE["🤖 Azure OpenAI Services"]
+        G[Embedding Generation<br/>text-embedding-ada-002]
+        H[Rate Limit Management<br/>Smart Throttling]
+        I[1536-dimension Vectors<br/>High-quality Embeddings]
+    end
+    
+    %% Snowflake Storage Layer
+    subgraph SNOWFLAKE["🏔️ Snowflake Vector Storage"]
+        J[Vector Storage<br/>VECTOR(FLOAT, 1536)]
+        K[Vector Indexing<br/>Automatic Optimization]
+        L[Similarity Search<br/>VECTOR_COSINE_SIMILARITY]
+    end
+    
+    %% API Layer
+    subgraph API["📡 API Gateway Layer"]
+        M[Embedding Management<br/>POST /embeddings/*]
+        N[Search Endpoints<br/>POST /search/*]
+        O[System Health<br/>GET /health/*]
+    end
+    
+    %% Search & Response Layer
+    subgraph SEARCH["🔍 Search & Response"]
+        P[Query Processing<br/>User Input Analysis]
+        Q[Vector Similarity Search<br/>Top-K Results]
+        R[Context Assembly<br/>Relevant Reports]
+        S[AI Response Generation<br/>GPT-4o-mini Chat]
+    end
+    
+    %% User Interface Layer
+    subgraph USER["👤 User Interface"]
+        T[User Query Input<br/>Natural Language]
+        U[Search Results<br/>Ranked Reports]
+        V[AI-Generated Response<br/>Contextual Answer]
+    end
+    
+    %% Main Flow Connections
+    A --> B
+    B --> D
+    D --> E
+    E --> G
+    G --> I
+    I --> J
+    J --> K
+    
+    %% Search Flow
+    T --> P
+    P --> G
+    G --> L
+    L --> Q
+    Q --> R
+    R --> S
+    S --> V
+    
+    %% API Flow
+    M --> E
+    N --> P
+    O --> K
+    
+    %% Cross-connections
+    C --> R
+    K --> Q
+    F --> G
+    H --> I
+    
+    %% Styling
+    classDef dataClass fill:#e1f5fe,stroke:#01579b,stroke-width:2px
+    classDef processClass fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
+    classDef azureClass fill:#e8f5e8,stroke:#1b5e20,stroke-width:2px
+    classDef snowflakeClass fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    classDef apiClass fill:#fce4ec,stroke:#880e4f,stroke-width:2px
+    classDef searchClass fill:#f1f8e9,stroke:#33691e,stroke-width:2px
+    classDef userClass fill:#e0f2f1,stroke:#00695c,stroke-width:2px
+    
+    class A,B,C dataClass
+    class D,E,F processClass
+    class G,H,I azureClass
+    class J,K,L snowflakeClass
+    class M,N,O apiClass
+    class P,Q,R,S searchClass
+    class T,U,V userClass 

@@ -1,0 +1,58 @@
+graph TD
+    %% User Input and API Layer
+    USER[👤 User Input<br/>Natural Language Query] --> API[📡 Module 2 API<br/>Hybrid Cortex Engine]
+    
+    %% Azure OpenAI Services
+    subgraph AZURE[🤖 Azure OpenAI Services]
+        EMBED[📊 Embedding Generation<br/>text-embedding-ada-002<br/>1536 dimensions]
+        CHAT[💬 Chat Completion<br/>gpt-4o-mini<br/>Natural Language Response]
+    end
+    
+    %% Snowflake Services
+    subgraph SNOWFLAKE[🏔️ Snowflake Data Platform]
+        VECTOR_STORE[📁 Vector Storage<br/>VECTOR(FLOAT, 1536)<br/>Persistent Storage]
+        SIMILARITY[🔍 Similarity Search<br/>VECTOR_COSINE_SIMILARITY<br/>Native Performance]
+        GEO_DATA[🗃️ Geological Data<br/>Module 1 Integration<br/>114k+ Reports]
+    end
+    
+    %% Workflow Paths
+    API --> EMBED
+    API --> CHAT
+    
+    %% Embedding and Storage Flow
+    EMBED --> VECTOR_STORE
+    GEO_DATA --> EMBED
+    
+    %% Search and Retrieval Flow
+    EMBED -.Query Embedding.-> SIMILARITY
+    SIMILARITY --> VECTOR_STORE
+    SIMILARITY -.Context.-> CHAT
+    
+    %% Response Flow
+    CHAT --> API
+    API --> USER
+    
+    %% Data Processing Pipeline
+    subgraph PIPELINE[⚙️ Data Processing Pipeline]
+        FETCH[📥 Fetch Geological Data<br/>FROM geological_reports]
+        PROCESS[🔄 Process Text<br/>Title + Commodities + Operator]
+        STORE[💾 Store Embeddings<br/>INSERT INTO vector_tables]
+    end
+    
+    GEO_DATA --> FETCH
+    FETCH --> PROCESS
+    PROCESS --> EMBED
+    EMBED --> STORE
+    STORE --> VECTOR_STORE
+    
+    %% Styling
+    style USER fill:#e3f2fd
+    style API fill:#f3e5f5
+    style AZURE fill:#fff3e0
+    style SNOWFLAKE fill:#e8f5e8
+    style PIPELINE fill:#fce4ec
+    
+    %% Performance Annotations
+    EMBED -.< 2sec.-> VECTOR_STORE
+    SIMILARITY -.< 500ms.-> CHAT
+    CHAT -.< 5sec.-> API 
