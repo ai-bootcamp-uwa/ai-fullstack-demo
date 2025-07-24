@@ -250,11 +250,27 @@ class SnowflakeClient:
 
             # Convert geometry to WKT for Snowflake, handling null geometries
             def safe_geometry_to_wkt(geom):
-                """Safely convert geometry to WKT, handling None values"""
+                """Safely convert geometry to WKT with size limits"""
                 if geom is None or pd.isna(geom):
                     return None
                 try:
-                    return geom.wkt
+                    wkt = geom.wkt
+                    # Check if geometry is too complex
+                    if len(wkt) > 1000000:  # 1MB limit for individual geometry
+                        # Try to simplify the geometry
+                        try:
+                            simplified = geom.simplify(0.001)
+                            simplified_wkt = simplified.wkt
+                            if len(simplified_wkt) < len(wkt) * 0.8:
+                                logger.debug(f"Simplified geometry: {len(wkt)} → {len(simplified_wkt)} chars")
+                                return simplified_wkt
+                            else:
+                                logger.warning(f"Geometry too complex ({len(wkt)} chars), setting to NULL")
+                                return None
+                        except:
+                            logger.warning(f"Failed to simplify complex geometry, setting to NULL")
+                            return None
+                    return wkt
                 except Exception:
                     return None
 
@@ -287,8 +303,34 @@ class SnowflakeClient:
                 'IS_SHAPED': 'IS_SHAPED',
                 'geometry_wkt': 'GEOMETRY'
             }
+            # Only map columns that exist
+            existing_mapping = {k: v for k, v in column_mapping.items() if k in df.columns}
+            df = df.rename(columns=existing_mapping)
 
-            df = df.rename(columns=column_mapping)
+            # Clean oversized geometries to prevent upload failures
+            if 'GEOMETRY' in df.columns:
+                logger.info("Filtering oversized geometries...")
+                def filter_large_geometries(geom_wkt):
+                    if geom_wkt is None or pd.isna(geom_wkt):
+                        return None
+                    geom_str = str(geom_wkt)
+                    if len(geom_str) > 1000000:  # 1MB limit
+                        logger.warning(f"Geometry too large ({len(geom_str)} chars), setting to NULL")
+                        return None
+                    return geom_wkt
+                # Apply geometry filtering
+                original_geom_count = df['GEOMETRY'].notna().sum()
+                df['GEOMETRY'] = df['GEOMETRY'].apply(filter_large_geometries)
+                filtered_geom_count = df['GEOMETRY'].notna().sum()
+                logger.info(f"Geometry filtering: {original_geom_count}  {filtered_geom_count} valid geometries")
+
+            # Clean text fields to prevent encoding issues
+            text_fields = ['TITLE', 'ABSTRACT', 'KEYWORDS', 'PROJECT', 'OPERATOR']
+            for field in text_fields:
+                if field in df.columns:
+                    df[field] = df[field].astype(str).apply(
+                        lambda x: x.encode('utf-8', errors='ignore').decode('utf-8')[:4000] if x and x != 'nan' else None
+                    )
 
             # Log data quality info
             total_records = len(df)
@@ -318,32 +360,76 @@ class SnowflakeClient:
             engine = self._get_engine()
 
             uploaded_records = 0
-            chunk_size = 25
+            chunk_size = 250  # Smaller chunks = less data lost per failure
             num_chunks = (total_records + chunk_size - 1) // chunk_size
             logger.info(f"Starting upload: {total_records} records in {num_chunks} chunks of {chunk_size}.")
-            for i in range(0, total_records, chunk_size):
-                chunk_start = i
-                chunk_end = min(i + chunk_size, total_records)
-                chunk_df = df.iloc[chunk_start:chunk_end]
-                chunk_num = (i // chunk_size) + 1
-                percent = (chunk_end / total_records) * 100
-                logger.info(f"Uploading chunk {chunk_num}/{num_chunks}: records {chunk_start+1}-{chunk_end} ({percent:.1f}% complete)")
-                try:
-                    chunk_df.to_sql(
-                        'GEOLOGICAL_REPORTS',
-                        engine,
-                        if_exists='append',
-                        index=False,
-                        method='multi',
-                        chunksize=chunk_size
-                    )
-                    uploaded_records += len(chunk_df)
-                except Exception as e:
-                    logger.warning(f"Chunk {chunk_num} failed: {e}. Continuing with next chunk.")
-            logger.info(f"Upload complete: {uploaded_records}/{total_records} records uploaded.")
+            failed_records = 0  # Track how many records we're losing
 
-            logger.info(f"Successfully loaded {total_records} records to Snowflake")
-            return total_records
+            # Use bulk processing instead of individual chunks
+            try:
+                df.to_sql(
+                    'GEOLOGICAL_REPORTS',
+                    engine,
+                    if_exists='append',
+                    index=False,
+                    method='multi',
+                    chunksize=chunk_size  # Let pandas handle chunking efficiently
+                )
+                uploaded_records = total_records
+                logger.info(f"Bulk upload complete: {uploaded_records}/{total_records} records uploaded.")
+            except Exception as e:
+                logger.warning(f"Bulk upload failed: {e}. Falling back to chunk processing.")
+                # Fallback to individual chunk processing if bulk fails
+                for i in range(0, total_records, chunk_size):
+                    chunk_start = i
+                    chunk_end = min(i + chunk_size, total_records)
+                    chunk_df = df.iloc[chunk_start:chunk_end]
+                    chunk_num = (i // chunk_size) + 1
+                    percent = (chunk_end / total_records) * 100
+                    try:
+                        chunk_df.to_sql(
+                            'GEOLOGICAL_REPORTS',
+                            engine,
+                            if_exists='append',
+                            index=False,
+                            method='multi'
+                        )
+                        uploaded_records += len(chunk_df)
+                        if chunk_num % 10 == 0:
+                            logger.info(f"Uploading chunk {chunk_num}/{num_chunks}: records {chunk_start+1}-{chunk_end} ({percent:.1f}% complete)")
+                            logger.info(f"Current status: {uploaded_records} uploaded, {failed_records} failed")
+                    except Exception as e:
+                        logger.error(f"Chunk {chunk_num} failed: {e}")
+                        logger.error(f"Chunk sample data: {chunk_df.iloc[0].to_dict() if len(chunk_df) > 0 else 'Empty chunk'}")
+                        # Try to save individual rows from the failed chunk
+                        recovered_records = 0
+                        for idx, row in chunk_df.iterrows():
+                            try:
+                                single_row_df = pd.DataFrame([row])
+                                single_row_df.to_sql(
+                                    'GEOLOGICAL_REPORTS',
+                                    engine,
+                                    if_exists='append',
+                                    index=False,
+                                    method='multi'
+                                )
+                                recovered_records += 1
+                            except Exception as row_error:
+                                logger.debug(f"Failed row ANUMBER {row.get('ANUMBER', 'unknown')}: {str(row_error)[:200]}")
+                        failed_records += (len(chunk_df) - recovered_records)
+                        uploaded_records += recovered_records
+                        logger.info(f"Chunk {chunk_num}: recovered {recovered_records}/{len(chunk_df)} records")
+                        logger.error(f"LOST {len(chunk_df) - recovered_records} records. Total lost: {failed_records}")
+                        continue
+            logger.info(f"Successfully loaded {uploaded_records} records to Snowflake")
+            # Final data loss report
+            if failed_records > 0:
+                logger.error(f"❌ DATA LOSS DETECTED: {failed_records} records failed to upload")
+                logger.error(f"Success rate: {(uploaded_records/total_records)*100:.1f}%")
+                logger.error("Check error logs above for specific chunk failures")
+            else:
+                logger.info(f"✅ All {uploaded_records} records uploaded successfully")
+            return uploaded_records
 
         except Exception as e:
             logger.error(f"Failed to load shapefile data: {e}")

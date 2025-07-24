@@ -14,7 +14,7 @@ help:
 	@echo "  make run-terminals - Start all 3 modules in separate terminal windows"
 	@echo "  make watch-logs    - Watch live logs from all modules"
 	@echo "  make run-data      - Start Module 1: Data Foundation (port 8000)"
-	@echo "  make run-cortex    - Start Module 2: Cortex Engine (port 3002)"  
+	@echo "  make run-cortex    - Start Module 2: Cortex Engine (port 3002)"
 	@echo "  make run-backend   - Start Module 3: Backend Gateway (port 3003)"
 	@echo "  make stop          - Stop all running modules"
 	@echo "  make test          - Run health checks on all modules"
@@ -223,9 +223,8 @@ health:
 # Clean up environment
 clean: stop
 	@echo "🧹 Cleaning up..."
-	rm -rf .venv
 	rm -rf data_foundation_project/logs
-	rm -rf cortex_engine/logs  
+	rm -rf cortex_engine/logs
 	rm -rf backend_gateway/logs
 	rm -f data_foundation_project/data_foundation.pid
 	rm -f cortex_engine/cortex_engine.pid
@@ -263,4 +262,4 @@ logs:
 	@echo "🤖 Cortex Engine:"
 	@tail -10 cortex_engine/logs/cortex_engine.log 2>/dev/null || echo "  No logs found"
 	@echo "🔗 Backend Gateway:"
-	@tail -10 backend_gateway/logs/backend_gateway.log 2>/dev/null || echo "  No logs found" 
+	@tail -10 backend_gateway/logs/backend_gateway.log 2>/dev/null || echo "  No logs found"
