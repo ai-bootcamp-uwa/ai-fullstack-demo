@@ -65,18 +65,16 @@ class VectorStore:
     def _add_vectors_to_snowflake(self, vectors, metadata, texts=None):
         """Add vectors to Snowflake storage."""
         for i, (vector, meta) in enumerate(zip(vectors, metadata)):
-            text = texts[i] if texts and i < len(texts) else str(meta)
-            snowflake_metadata = {
-                'original_metadata': meta,
-                'text_content': text,
-                'vector_dimension': len(vector),
-                'created_by': 'hybrid_vector_store'
-            }
+            # Extract report_id and title_text from metadata and texts
+            report_id = meta.get("report_id") if isinstance(meta, dict) else None
+            title_text = texts[i] if texts and i < len(texts) else str(meta)
+            embedding_vector = vector.tolist()
+            model_used = "text-embedding-ada-002"  # Or fetch from config if needed
             success = self.snowflake_store.store_embedding(
-                text=text,
-                embedding=vector.tolist(),
-                metadata=snowflake_metadata,
-                job_id=f"vector_store_{hash(text) % 1000000}"
+                report_id=report_id,
+                title_text=title_text,
+                embedding_vector=embedding_vector,
+                model_used=model_used
             )
             if not success:
                 logger.error(f"Failed to store vector {i} in Snowflake")
