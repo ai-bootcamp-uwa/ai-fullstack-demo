@@ -104,16 +104,14 @@ class SnowflakeVectorStore:
             return False
 
     def _get_vector_schema_sql(self) -> str:
-        """Get the SQL statements for creating vector schema."""
-        vector_dim = self.config.vector_dimension
-
+        """Get the SQL statements for creating vector schema using VARIANT for embeddings."""
         return f"""
-        -- Create table for storing title embeddings
+        -- Create table for storing title embeddings using VARIANT (compatible with Snowflake)
         CREATE TABLE IF NOT EXISTS TITLE_EMBEDDINGS (
             id INTEGER AUTOINCREMENT,
             report_id INTEGER NOT NULL,
             title_text TEXT NOT NULL,
-            embedding_vector VECTOR(FLOAT, {vector_dim}),
+            embedding_vector VARIANT,
             model_used VARCHAR(100) DEFAULT 'text-embedding-ada-002',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -233,33 +231,33 @@ class SnowflakeVectorStore:
     def store_embedding(self, report_id: int, title_text: str, embedding_vector: List[float],
                        model_used: str = "text-embedding-ada-002") -> bool:
         """
-        Store a single title embedding in Snowflake.
-
-        NOTE: VECTOR types require explicit construction using VECTOR_CONSTRUCT_FLOAT([...]) per Snowflake documentation.
+        Store a single title embedding in Snowflake using raw connector and direct JSON.
         """
         if not self.test_connection():
             logger.error("Cannot store embedding: Snowflake connection failed")
             return False
-        # if not self._supports_vector_type():
-        #     raise RuntimeError("Snowflake VECTOR data type is not supported on this instance. No fallback is allowed. Please upgrade your Snowflake edition or enable VECTOR support.")
         try:
-            with self.get_connection() as conn:
-                # Use VECTOR_CONSTRUCT_FLOAT for correct VECTOR construction
-                vector_values = ','.join(map(str, embedding_vector))
-                insert_sql = f'''
-                INSERT INTO TITLE_EMBEDDINGS
-                (report_id, title_text, embedding_vector, model_used, created_at)
-                VALUES (:report_id, :title_text, VECTOR_CONSTRUCT_FLOAT([{vector_values}]), :model_used, CURRENT_TIMESTAMP)
-                '''
-                params = {
-                    "report_id": report_id,
-                    "title_text": title_text,
-                    "model_used": model_used
-                }
-                conn.execute(text(insert_sql), params)
-                conn.commit()
+            # Use raw Snowflake connector to avoid SQLAlchemy issues
+            conn_params = self.config.get_connection_params()
+            raw_conn = snowflake.connector.connect(**conn_params)
+            cursor = None
+            try:
+                cursor = raw_conn.cursor()
+                # Convert embedding to JSON array string
+                embedding_json = json.dumps(embedding_vector)
+                # Simple INSERT without PARSE_JSON - let Snowflake handle the conversion
+                insert_sql = """
+                INSERT INTO TITLE_EMBEDDINGS (report_id, title_text, embedding_vector, model_used, created_at)
+                SELECT %s, %s, PARSE_JSON(%s), %s, CURRENT_TIMESTAMP
+                """
+                cursor.execute(insert_sql, (report_id, title_text, embedding_json, model_used))
+                raw_conn.commit()
                 logger.debug(f"Stored embedding for report {report_id}")
                 return True
+            finally:
+                if cursor:
+                    cursor.close()
+                raw_conn.close()
         except Exception as e:
             logger.error(f"Failed to store embedding for report {report_id}: {e}")
             return False
@@ -319,23 +317,19 @@ class SnowflakeVectorStore:
             return False
 
     def search_similar_titles(self, query_embedding: List[float], limit: int = 10) -> List[Dict[str, Any]]:
-        """
-        Search for similar titles using vector similarity. Uses VECTOR_CONSTRUCT_FLOAT for query vector.
-        """
+        """Search for similar titles using array-based similarity calculation."""
         if not self.test_connection():
             logger.error("Cannot search: Snowflake connection failed")
             return []
-        if not self._supports_vector_type():
-            raise RuntimeError("Snowflake VECTOR data type is not supported on this instance. No fallback is allowed. Please upgrade your Snowflake edition or enable VECTOR support.")
         try:
             with self.get_connection() as conn:
-                # Use VECTOR_CONSTRUCT_FLOAT for query vector
-                query_vector_values = ','.join(map(str, query_embedding))
-                search_sql = f"""
+                search_sql = """
                 SELECT
                     te.report_id,
                     te.title_text,
-                    VECTOR_COSINE_SIMILARITY(te.embedding_vector, VECTOR_CONSTRUCT_FLOAT([{query_vector_values}])) as similarity_score,
+                    ARRAY_INNER_PRODUCT(te.embedding_vector, PARSE_JSON(:query_vector)) /
+                    (SQRT(ARRAY_INNER_PRODUCT(te.embedding_vector, te.embedding_vector)) *
+                     SQRT(ARRAY_INNER_PRODUCT(PARSE_JSON(:query_vector), PARSE_JSON(:query_vector)))) as similarity_score,
                     te.model_used,
                     te.created_at
                 FROM TITLE_EMBEDDINGS te
@@ -343,8 +337,70 @@ class SnowflakeVectorStore:
                 ORDER BY similarity_score DESC
                 LIMIT :limit
                 """
-                results = conn.execute(text(search_sql), {"limit": limit}).fetchall()
-                return [dict(row) for row in results]
+                query_vector_json = json.dumps(query_embedding)
+                results = conn.execute(text(search_sql), {
+                    "query_vector": query_vector_json,
+                    "limit": limit
+                }).fetchall()
+                return [
+                    {
+                        "report_id": row[0],
+                        "title_text": row[1],
+                        "similarity_score": float(row[2]) if row[2] else 0.0,
+                        "model_used": row[3],
+                        "created_at": str(row[4])
+                    }
+                    for row in results
+                ]
+        except Exception as e:
+            logger.error(f"Failed to search similar titles: {e}")
+            return []
+
+    def similarity_search(self, query_embedding: List[float], top_k: int = 5) -> List[Dict[str, Any]]:
+        """Perform similarity search using VARIANT stored embeddings."""
+        if not self.test_connection():
+            logger.error("Cannot search: Snowflake connection failed")
+            return []
+        try:
+            with self.get_connection() as conn:
+                # Convert query to JSON for comparison
+                query_json = json.dumps(query_embedding)
+                # Use array functions for cosine similarity calculation
+                search_sql = """
+                SELECT
+                    te.report_id,
+                    te.title_text,
+                    ARRAY_INNER_PRODUCT(te.embedding_vector, PARSE_JSON(:query_json)) /
+                    (SQRT(ARRAY_INNER_PRODUCT(te.embedding_vector, te.embedding_vector)) *
+                     SQRT(ARRAY_INNER_PRODUCT(PARSE_JSON(:query_json), PARSE_JSON(:query_json)))) as similarity_score,
+                    te.model_used,
+                    te.created_at
+                FROM TITLE_EMBEDDINGS te
+                WHERE te.embedding_vector IS NOT NULL
+                ORDER BY similarity_score DESC
+                LIMIT :limit
+                """
+                result = conn.execute(text(search_sql), {
+                    "query_json": query_json,
+                    "limit": top_k
+                })
+                results = result.fetchall()
+                # Transform results to match expected format
+                formatted_results = []
+                for row in results:
+                    formatted_results.append({
+                        'id': row[0],  # report_id
+                        'similarity_score': float(row[2]) if row[2] else 0.0,  # similarity_score
+                        'metadata': {
+                            'original_metadata': {
+                                'report_id': row[0],
+                                'model_used': row[3],
+                                'created_at': str(row[4])
+                            },
+                            'text_content': row[1]  # title_text
+                        }
+                    })
+                return formatted_results
         except Exception as e:
             logger.error(f"Failed to search similar titles: {e}")
             return []
