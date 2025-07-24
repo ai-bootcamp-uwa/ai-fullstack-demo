@@ -223,31 +223,35 @@ class SnowflakeVectorStore:
 
     def store_embedding(self, report_id: int, title_text: str, embedding_vector: List[float],
                        model_used: str = "text-embedding-ada-002") -> bool:
-        """Store a single title embedding."""
+        """
+        Store a single title embedding in Snowflake.
+
+        NOTE: Server-side binding (parameterized queries) is NOT supported for VECTOR columns in Snowflake.
+        See: https://docs.snowflake.com/en/developer-guide/udf/vector#limitations
+        The vector must be embedded directly in the SQL string as a literal and cast using ::VECTOR(FLOAT,N).
+        """
         if not self.test_connection():
             logger.error("Cannot store embedding: Snowflake connection failed")
             return False
-
         try:
             with self.get_connection() as conn:
-                # Pass embedding_vector as a native list for VECTOR column
-                insert_sql = """
+                # Format the vector as a Snowflake VECTOR literal (see docs: server-side binding not supported)
+                vector_literal = '[' + ','.join(map(str, embedding_vector)) + ']'
+                vector_dim = self.config.vector_dimension
+                insert_sql = f'''
                 INSERT INTO TITLE_EMBEDDINGS
                 (report_id, title_text, embedding_vector, model_used, created_at)
-                VALUES (:report_id, :title_text, :embedding_vector, :model_used, CURRENT_TIMESTAMP)
-                """
-
-                conn.execute(text(insert_sql), {
+                VALUES (:report_id, :title_text, {vector_literal}::VECTOR(FLOAT,{vector_dim}), :model_used, CURRENT_TIMESTAMP)
+                '''
+                params = {
                     "report_id": report_id,
                     "title_text": title_text,
-                    "embedding_vector": embedding_vector,  # Pass as list, not string
                     "model_used": model_used
-                })
+                }
+                conn.execute(text(insert_sql), params)
                 conn.commit()
-
                 logger.debug(f"Stored embedding for report {report_id}")
                 return True
-
         except Exception as e:
             logger.error(f"Failed to store embedding for report {report_id}: {e}")
             return False
