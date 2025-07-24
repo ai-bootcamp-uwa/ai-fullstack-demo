@@ -221,27 +221,35 @@ class SnowflakeVectorStore:
             logger.error(f"Failed to get vector statistics: {e}")
             return {"error": str(e)}
 
+    def _supports_vector_type(self) -> bool:
+        """Check if Snowflake instance supports VECTOR data types."""
+        try:
+            with self.get_connection() as conn:
+                result = conn.execute(text("SELECT SYSTEM$GET_SUPPORTED_FEATURES('VECTOR_DATA_TYPE')")).fetchone()
+                return bool(result and result[0])
+        except Exception:
+            return False
+
     def store_embedding(self, report_id: int, title_text: str, embedding_vector: List[float],
                        model_used: str = "text-embedding-ada-002") -> bool:
         """
         Store a single title embedding in Snowflake.
 
-        NOTE: Server-side binding (parameterized queries) is NOT supported for VECTOR columns in Snowflake.
-        See: https://docs.snowflake.com/en/developer-guide/udf/vector#limitations
-        The vector must be embedded directly in the SQL string as a literal and cast using ::VECTOR(FLOAT,N).
+        NOTE: VECTOR types require explicit construction using VECTOR_CONSTRUCT_FLOAT([...]) per Snowflake documentation.
         """
         if not self.test_connection():
             logger.error("Cannot store embedding: Snowflake connection failed")
             return False
+        # if not self._supports_vector_type():
+        #     raise RuntimeError("Snowflake VECTOR data type is not supported on this instance. No fallback is allowed. Please upgrade your Snowflake edition or enable VECTOR support.")
         try:
             with self.get_connection() as conn:
-                # Format the vector as a Snowflake VECTOR literal (see docs: server-side binding not supported)
-                vector_literal = '[' + ','.join(map(str, embedding_vector)) + ']'
-                vector_dim = self.config.vector_dimension
+                # Use VECTOR_CONSTRUCT_FLOAT for correct VECTOR construction
+                vector_values = ','.join(map(str, embedding_vector))
                 insert_sql = f'''
                 INSERT INTO TITLE_EMBEDDINGS
                 (report_id, title_text, embedding_vector, model_used, created_at)
-                VALUES (:report_id, :title_text, {vector_literal}::VECTOR(FLOAT,{vector_dim}), :model_used, CURRENT_TIMESTAMP)
+                VALUES (:report_id, :title_text, VECTOR_CONSTRUCT_FLOAT([{vector_values}]), :model_used, CURRENT_TIMESTAMP)
                 '''
                 params = {
                     "report_id": report_id,
@@ -311,21 +319,23 @@ class SnowflakeVectorStore:
             return False
 
     def search_similar_titles(self, query_embedding: List[float], limit: int = 10) -> List[Dict[str, Any]]:
-        """Search for similar titles using vector similarity."""
+        """
+        Search for similar titles using vector similarity. Uses VECTOR_CONSTRUCT_FLOAT for query vector.
+        """
         if not self.test_connection():
             logger.error("Cannot search: Snowflake connection failed")
             return []
-
+        if not self._supports_vector_type():
+            raise RuntimeError("Snowflake VECTOR data type is not supported on this instance. No fallback is allowed. Please upgrade your Snowflake edition or enable VECTOR support.")
         try:
             with self.get_connection() as conn:
-                # Convert query embedding to string format
-                query_vector_str = str(query_embedding)
-
-                search_sql = """
+                # Use VECTOR_CONSTRUCT_FLOAT for query vector
+                query_vector_values = ','.join(map(str, query_embedding))
+                search_sql = f"""
                 SELECT
                     te.report_id,
                     te.title_text,
-                    VECTOR_COSINE_SIMILARITY(te.embedding_vector, :query_vector) as similarity_score,
+                    VECTOR_COSINE_SIMILARITY(te.embedding_vector, VECTOR_CONSTRUCT_FLOAT([{query_vector_values}])) as similarity_score,
                     te.model_used,
                     te.created_at
                 FROM TITLE_EMBEDDINGS te
@@ -333,23 +343,8 @@ class SnowflakeVectorStore:
                 ORDER BY similarity_score DESC
                 LIMIT :limit
                 """
-
-                results = conn.execute(text(search_sql), {
-                    "query_vector": query_vector_str,
-                    "limit": limit
-                }).fetchall()
-
-                return [
-                    {
-                        "report_id": row[0],
-                        "title_text": row[1],
-                        "similarity_score": float(row[2]),
-                        "model_used": row[3],
-                        "created_at": str(row[4])
-                    }
-                    for row in results
-                ]
-
+                results = conn.execute(text(search_sql), {"limit": limit}).fetchall()
+                return [dict(row) for row in results]
         except Exception as e:
             logger.error(f"Failed to search similar titles: {e}")
             return []
