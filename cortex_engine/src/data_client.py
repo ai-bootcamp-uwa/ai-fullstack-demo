@@ -6,7 +6,8 @@ class DataFoundationClient:
 
     async def fetch_reports(self, limit: int = 10, offset: int = 0):
         """Fetch a list of reports from the Data Foundation API."""
-        async with httpx.AsyncClient() as client:
+        timeout = httpx.Timeout(timeout=120.0)  # 2 minute timeout
+        async with httpx.AsyncClient(timeout=timeout) as client:
             response = await client.get(f"{self.base_url}/reports", params={"limit": limit, "offset": offset})
             response.raise_for_status()
             return response.json()

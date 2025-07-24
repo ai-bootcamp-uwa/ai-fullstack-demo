@@ -24,7 +24,19 @@ async def main():
         return
     # Step 3: Fetch those specific reports from Module 1
     data_client = DataFoundationClient()
-    all_reports = await data_client.fetch_reports(limit=5000)
+    print("📥 Fetching reports in batches...")
+    all_reports = []
+    batch_size = 500  # Fetch 500 at a time
+    total_needed = min(5000, len(report_ids_needing_embeddings))
+    for offset in range(0, total_needed, batch_size):
+        current_limit = min(batch_size, total_needed - offset)
+        print(f"   Fetching batch: offset={offset}, limit={current_limit}")
+        batch_reports = await data_client.fetch_reports(limit=current_limit, offset=offset)
+        all_reports.extend(batch_reports)
+        if len(batch_reports) < current_limit:
+            # Reached end of available reports
+            break
+    print(f"📊 Fetched {len(all_reports)} reports total")
     # Filter to only the ones needing embeddings
     reports_to_process = [
         r for r in all_reports
