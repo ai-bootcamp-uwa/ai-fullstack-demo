@@ -103,47 +103,37 @@ class SnowflakeVectorStore:
             logger.error(f"Failed to create vector schema: {e}")
             return False
 
+    def add_embedding_columns_to_geological_reports(self) -> bool:
+        """Add embedding columns to existing Module 1 GEOLOGICAL_REPORTS table"""
+        if not self.test_connection():
+            logger.error("Cannot alter table: Snowflake connection failed")
+            return False
+        try:
+            alter_statements = [
+                "ALTER TABLE GEOLOGICAL_REPORTS ADD COLUMN IF NOT EXISTS TITLE_EMBEDDING VARIANT",
+                "ALTER TABLE GEOLOGICAL_REPORTS ADD COLUMN IF NOT EXISTS EMBEDDING_MODEL VARCHAR(100)",
+                "ALTER TABLE GEOLOGICAL_REPORTS ADD COLUMN IF NOT EXISTS EMBEDDING_CREATED_AT TIMESTAMP"
+            ]
+            conn_params = self.config.get_connection_params()
+            raw_conn = snowflake.connector.connect(**conn_params)
+            try:
+                cursor = raw_conn.cursor()
+                for statement in alter_statements:
+                    logger.info(f"Executing: {statement}")
+                    cursor.execute(statement)
+                    raw_conn.commit()
+                logger.info("Successfully added embedding columns to GEOLOGICAL_REPORTS")
+                return True
+            finally:
+                cursor.close()
+                raw_conn.close()
+        except Exception as e:
+            logger.error(f"Failed to add embedding columns: {e}")
+            return False
+
     def _get_vector_schema_sql(self) -> str:
-        """Get the SQL statements for creating vector schema using VARIANT for embeddings."""
-        return f"""
-        -- Create table for storing title embeddings using VARIANT (compatible with Snowflake)
-        CREATE TABLE IF NOT EXISTS TITLE_EMBEDDINGS (
-            id INTEGER AUTOINCREMENT,
-            report_id INTEGER NOT NULL,
-            title_text TEXT NOT NULL,
-            embedding_vector VARIANT,
-            model_used VARCHAR(100) DEFAULT 'text-embedding-ada-002',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            PRIMARY KEY (id)
-        );
-
-        -- Create table for tracking embedding jobs
-        CREATE TABLE IF NOT EXISTS EMBEDDING_JOBS (
-            job_id VARCHAR(100) PRIMARY KEY,
-            job_type VARCHAR(50) NOT NULL,
-            status VARCHAR(20) DEFAULT 'PENDING',
-            total_records INTEGER,
-            processed_records INTEGER DEFAULT 0,
-            failed_records INTEGER DEFAULT 0,
-            error_message TEXT,
-            started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            completed_at TIMESTAMP,
-            metadata VARIANT
-        );
-
-        -- Create table for system health monitoring
-        CREATE TABLE IF NOT EXISTS HYBRID_SYSTEM_HEALTH (
-            check_id INTEGER AUTOINCREMENT,
-            component VARCHAR(50) NOT NULL,
-            status VARCHAR(20) NOT NULL,
-            response_time_ms INTEGER,
-            error_message TEXT,
-            checked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            metadata VARIANT,
-            PRIMARY KEY (check_id)
-        );
-        """
+        """(Deprecated) Get the SQL statements for creating vector schema."""
+        return """(Deprecated)"""
 
     def get_vector_statistics(self) -> Dict[str, Any]:
         """Get statistics about stored vectors and system health."""
@@ -230,33 +220,32 @@ class SnowflakeVectorStore:
 
     def store_embedding(self, report_id: int, title_text: str, embedding_vector: List[float],
                        model_used: str = "text-embedding-ada-002") -> bool:
-        """
-        Store a single title embedding in Snowflake using raw connector and direct JSON.
-        """
+        """Update existing GEOLOGICAL_REPORTS record with embedding"""
         if not self.test_connection():
             logger.error("Cannot store embedding: Snowflake connection failed")
             return False
         try:
-            # Use raw Snowflake connector to avoid SQLAlchemy issues
             conn_params = self.config.get_connection_params()
             raw_conn = snowflake.connector.connect(**conn_params)
-            cursor = None
             try:
                 cursor = raw_conn.cursor()
-                # Convert embedding to JSON array string
                 embedding_json = json.dumps(embedding_vector)
-                # Simple INSERT without PARSE_JSON - let Snowflake handle the conversion
-                insert_sql = """
-                INSERT INTO TITLE_EMBEDDINGS (report_id, title_text, embedding_vector, model_used, created_at)
-                SELECT %s, %s, PARSE_JSON(%s), %s, CURRENT_TIMESTAMP
+                update_sql = """
+                UPDATE GEOLOGICAL_REPORTS
+                SET TITLE_EMBEDDING = PARSE_JSON(%s),
+                    EMBEDDING_MODEL = %s,
+                    EMBEDDING_CREATED_AT = CURRENT_TIMESTAMP
+                WHERE ANUMBER = %s
                 """
-                cursor.execute(insert_sql, (report_id, title_text, embedding_json, model_used))
+                cursor.execute(update_sql, (embedding_json, model_used, report_id))
+                if cursor.rowcount == 0:
+                    logger.warning(f"No record found with ANUMBER = {report_id}")
+                    return False
                 raw_conn.commit()
-                logger.debug(f"Stored embedding for report {report_id}")
+                logger.debug(f"Updated embedding for report {report_id}")
                 return True
             finally:
-                if cursor:
-                    cursor.close()
+                cursor.close()
                 raw_conn.close()
         except Exception as e:
             logger.error(f"Failed to store embedding for report {report_id}: {e}")
@@ -357,52 +346,77 @@ class SnowflakeVectorStore:
             return []
 
     def similarity_search(self, query_embedding: List[float], top_k: int = 5) -> List[Dict[str, Any]]:
-        """Perform similarity search using VARIANT stored embeddings."""
-        if not self.test_connection():
-            logger.error("Cannot search: Snowflake connection failed")
-            return []
+        """Search using embeddings stored in GEOLOGICAL_REPORTS table"""
         try:
-            with self.get_connection() as conn:
-                # Convert query to JSON for comparison
+            conn_params = self.config.get_connection_params()
+            raw_conn = snowflake.connector.connect(**conn_params)
+            try:
+                cursor = raw_conn.cursor(DictCursor)
                 query_json = json.dumps(query_embedding)
-                # Use array functions for cosine similarity calculation
                 search_sql = """
                 SELECT
-                    te.report_id,
-                    te.title_text,
-                    ARRAY_INNER_PRODUCT(te.embedding_vector, PARSE_JSON(:query_json)) /
-                    (SQRT(ARRAY_INNER_PRODUCT(te.embedding_vector, te.embedding_vector)) *
-                     SQRT(ARRAY_INNER_PRODUCT(PARSE_JSON(:query_json), PARSE_JSON(:query_json)))) as similarity_score,
-                    te.model_used,
-                    te.created_at
-                FROM TITLE_EMBEDDINGS te
-                WHERE te.embedding_vector IS NOT NULL
+                    ANUMBER,
+                    TITLE,
+                    OPERATOR,
+                    TARGET_COMMODITIES,
+                    REPORT_YEAR,
+                    ARRAY_INNER_PRODUCT(TITLE_EMBEDDING, PARSE_JSON(%s)) /
+                    (SQRT(ARRAY_INNER_PRODUCT(TITLE_EMBEDDING, TITLE_EMBEDDING)) *
+                     SQRT(ARRAY_INNER_PRODUCT(PARSE_JSON(%s), PARSE_JSON(%s)))) as similarity_score,
+                    EMBEDDING_CREATED_AT
+                FROM GEOLOGICAL_REPORTS
+                WHERE TITLE_EMBEDDING IS NOT NULL
                 ORDER BY similarity_score DESC
-                LIMIT :limit
+                LIMIT %s
                 """
-                result = conn.execute(text(search_sql), {
-                    "query_json": query_json,
-                    "limit": top_k
-                })
-                results = result.fetchall()
-                # Transform results to match expected format
+                cursor.execute(search_sql, (query_json, query_json, query_json, top_k))
+                results = cursor.fetchall()
                 formatted_results = []
                 for row in results:
                     formatted_results.append({
-                        'id': row[0],  # report_id
-                        'similarity_score': float(row[2]) if row[2] else 0.0,  # similarity_score
+                        'id': row['ANUMBER'],
+                        'similarity_score': float(row['SIMILARITY_SCORE']) if row['SIMILARITY_SCORE'] else 0.0,
                         'metadata': {
                             'original_metadata': {
-                                'report_id': row[0],
-                                'model_used': row[3],
-                                'created_at': str(row[4])
+                                'report_id': row['ANUMBER'],
+                                'operator': row['OPERATOR'],
+                                'commodities': row['TARGET_COMMODITIES'],
+                                'year': row['REPORT_YEAR']
                             },
-                            'text_content': row[1]  # title_text
+                            'text_content': row['TITLE']
                         }
                     })
                 return formatted_results
+            finally:
+                cursor.close()
+                raw_conn.close()
         except Exception as e:
             logger.error(f"Failed to search similar titles: {e}")
+            return []
+
+    def get_reports_needing_embeddings(self, limit: int = 1000) -> List[int]:
+        """Get ANUMBER of reports that don't have embeddings yet"""
+        try:
+            conn_params = self.config.get_connection_params()
+            raw_conn = snowflake.connector.connect(**conn_params)
+            try:
+                cursor = raw_conn.cursor()
+                query = """
+                SELECT ANUMBER
+                FROM GEOLOGICAL_REPORTS
+                WHERE TITLE IS NOT NULL
+                AND (TITLE_EMBEDDING IS NULL OR TITLE_EMBEDDING = 'null')
+                ORDER BY ANUMBER
+                LIMIT %s
+                """
+                cursor.execute(query, (limit,))
+                results = cursor.fetchall()
+                return [row[0] for row in results]
+            finally:
+                cursor.close()
+                raw_conn.close()
+        except Exception as e:
+            logger.error(f"Failed to get reports needing embeddings: {e}")
             return []
 
 
