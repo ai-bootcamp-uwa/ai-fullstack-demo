@@ -4,6 +4,8 @@ import sys
 import os
 import logging
 from typing import Optional, Dict, Any
+from fastapi.responses import StreamingResponse
+import json
 
 # Add parent directories to Python path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
@@ -35,10 +37,87 @@ def health_check():
 @app.get("/reports")
 def get_reports(limit: int = 10, offset: int = 0):
     try:
-        return loader.get_reports(limit=limit, offset=offset)
+        # For large requests, use streaming response
+        if limit > 500:
+            def generate_reports():
+                chunk_size = 500
+                current_offset = offset
+                remaining = limit
+                yield '{"reports": ['
+                first_chunk = True
+                while remaining > 0:
+                    current_limit = min(chunk_size, remaining)
+                    chunk_reports = loader.get_reports(limit=current_limit, offset=current_offset)
+                    if not chunk_reports:
+                        break
+                    for i, report in enumerate(chunk_reports):
+                        if not first_chunk or i > 0:
+                            yield ','
+                        yield json.dumps(report)
+                        first_chunk = False
+                    current_offset += current_limit
+                    remaining -= len(chunk_reports)
+                    if len(chunk_reports) < current_limit:
+                        break
+                yield ']}'
+            return StreamingResponse(
+                generate_reports(),
+                media_type="application/json",
+                headers={"X-Total-Count": str(limit)}
+            )
+        else:
+            # Standard response for small requests
+            return loader.get_reports(limit=limit, offset=offset)
     except Exception as e:
         logger.error(f"Error fetching reports: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch reports from Snowflake.")
+
+@app.get("/reports/bulk")
+def get_reports_bulk(
+    limit: int = 5000,
+    chunk_size: int = 500,
+    include_geometry: bool = False
+):
+    """Optimized endpoint for bulk data retrieval"""
+    try:
+        def generate_bulk_data():
+            processed = 0
+            current_offset = 0
+            # Optimized query without geometry for faster response
+            if not include_geometry:
+                query_fields = "ANUMBER, TITLE, REPORT_YEAR, AUTHOR_COMPANY, OPERATOR, TARGET_COMMODITIES"
+            else:
+                query_fields = "ANUMBER, TITLE, REPORT_YEAR, AUTHOR_COMPANY, OPERATOR, TARGET_COMMODITIES, GEOMETRY"
+            while processed < limit:
+                current_limit = min(chunk_size, limit - processed)
+                reports = loader.snowflake_client.execute_query(
+                    f"""
+                    SELECT {query_fields}
+                    FROM GEOLOGICAL_REPORTS
+                    ORDER BY ANUMBER
+                    LIMIT :limit OFFSET :offset
+                    """,
+                    {"limit": current_limit, "offset": current_offset}
+                )
+                if not reports:
+                    break
+                for report in reports:
+                    yield json.dumps(report) + '\n'
+                processed += len(reports)
+                current_offset += len(reports)
+                if len(reports) < current_limit:
+                    break
+        return StreamingResponse(
+            generate_bulk_data(),
+            media_type="application/x-ndjson",
+            headers={
+                "X-Total-Requested": str(limit),
+                "X-Chunk-Size": str(chunk_size)
+            }
+        )
+    except Exception as e:
+        logger.error(f"Error in bulk fetch: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch bulk data")
 
 # Get report by ID endpoint
 @app.get("/reports/{report_id}")

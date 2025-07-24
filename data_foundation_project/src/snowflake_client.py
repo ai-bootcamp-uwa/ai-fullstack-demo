@@ -7,6 +7,7 @@ import geopandas as gpd
 from shapely import wkt
 import logging
 from contextlib import contextmanager
+from snowflake.connector import DictCursor
 
 from .config import snowflake_config
 
@@ -86,21 +87,39 @@ class SnowflakeClient:
             return False
 
     def execute_query(self, query: str, params: Optional[Dict] = None) -> List[Dict[str, Any]]:
-        """Execute a query and return results as list of dictionaries"""
+        """Execute a query with extended timeout for large requests"""
         try:
-            with self.get_connection() as conn:
-                result = conn.execute(text(query), params or {})
-                columns = result.keys()
-                rows = result.fetchall()
-                results = [dict(zip(columns, row)) for row in rows]
-
-                # Normalize results for API compatibility
-                normalized_results = []
-                for row in results:
-                    normalized_row = self._normalize_result_row(row)
-                    normalized_results.append(normalized_row)
-
-                return normalized_results
+            # Determine if this is a large request
+            limit_param = params.get('limit', 10) if params else 10
+            if limit_param > 1000:
+                # Use direct snowflake connector for large queries (better timeout handling)
+                conn_params = self.config.get_connection_params()
+                raw_conn = snowflake.connector.connect(**conn_params)
+                try:
+                    cursor = raw_conn.cursor(DictCursor)
+                    cursor.execute(query, params or {})
+                    results = cursor.fetchall()
+                    # Convert to list of dicts and normalize
+                    normalized_results = []
+                    for row in results:
+                        normalized_row = self._normalize_result_row(dict(row))
+                        normalized_results.append(normalized_row)
+                    return normalized_results
+                finally:
+                    cursor.close()
+                    raw_conn.close()
+            else:
+                # Use SQLAlchemy for small queries (existing code)
+                with self.get_connection() as conn:
+                    result = conn.execute(text(query), params or {})
+                    columns = result.keys()
+                    rows = result.fetchall()
+                    results = [dict(zip(columns, row)) for row in rows]
+                    normalized_results = []
+                    for row in results:
+                        normalized_row = self._normalize_result_row(row)
+                        normalized_results.append(normalized_row)
+                    return normalized_results
         except Exception as e:
             logger.error(f"Query execution failed: {e}")
             raise
@@ -331,14 +350,26 @@ class SnowflakeClient:
             raise
 
     def get_reports(self, limit: int = 10, offset: int = 0) -> List[Dict[str, Any]]:
-        """Get geological reports with pagination"""
-        query = """
-        SELECT ANUMBER, TITLE, REPORT_YEAR, AUTHOR_COMPANY, OPERATOR,
-               TARGET_COMMODITIES, PROJECT, GEOMETRY
-        FROM GEOLOGICAL_REPORTS
-        ORDER BY ANUMBER
-        LIMIT :limit OFFSET :offset
-        """
+        """Get geological reports with pagination - optimized for large requests"""
+        # Add query hints for large requests
+        if limit > 1000:
+            query = """
+            SELECT /*+ USE_CACHED_RESULT(FALSE) */
+                   ANUMBER, TITLE, REPORT_YEAR, AUTHOR_COMPANY, OPERATOR,
+                   TARGET_COMMODITIES, PROJECT, GEOMETRY
+            FROM GEOLOGICAL_REPORTS
+            ORDER BY ANUMBER
+            LIMIT :limit OFFSET :offset
+            """
+        else:
+            # Standard query for small requests
+            query = """
+            SELECT ANUMBER, TITLE, REPORT_YEAR, AUTHOR_COMPANY, OPERATOR,
+                   TARGET_COMMODITIES, PROJECT, GEOMETRY
+            FROM GEOLOGICAL_REPORTS
+            ORDER BY ANUMBER
+            LIMIT :limit OFFSET :offset
+            """
         return self.execute_query(query, {"limit": limit, "offset": offset})
 
     def get_report_by_id(self, report_id: int) -> Optional[Dict[str, Any]]:

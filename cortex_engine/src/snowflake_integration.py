@@ -251,6 +251,49 @@ class SnowflakeVectorStore:
             logger.error(f"Failed to store embedding for report {report_id}: {e}")
             return False
 
+    def store_embeddings_bulk(self, embedding_data: List[Dict]) -> bool:
+        """Store multiple embeddings in a single transaction"""
+        try:
+            conn_params = self.config.get_connection_params()
+            raw_conn = snowflake.connector.connect(**conn_params)
+            try:
+                cursor = raw_conn.cursor()
+                # Prepare bulk update using CASE WHEN for each report
+                if not embedding_data:
+                    return True
+                case_title_embedding = "\n".join([
+                    f"WHEN {data['report_id']} THEN PARSE_JSON(%s)" for data in embedding_data
+                ])
+                case_model = "\n".join([
+                    f"WHEN {data['report_id']} THEN %s" for data in embedding_data
+                ])
+                report_ids = [str(data['report_id']) for data in embedding_data]
+                update_sql = f"""
+                UPDATE GEOLOGICAL_REPORTS
+                SET TITLE_EMBEDDING = CASE ANUMBER
+                {case_title_embedding}
+                END,
+                EMBEDDING_MODEL = CASE ANUMBER
+                {case_model}
+                END,
+                EMBEDDING_CREATED_AT = CURRENT_TIMESTAMP
+                WHERE ANUMBER IN ({','.join(report_ids)})
+                """
+                params = []
+                for data in embedding_data:
+                    params.append(json.dumps(data['embedding_vector']))
+                for data in embedding_data:
+                    params.append(data['model_used'])
+                cursor.execute(update_sql, params)
+                raw_conn.commit()
+                return True
+            finally:
+                cursor.close()
+                raw_conn.close()
+        except Exception as e:
+            logger.error(f"Failed to store embeddings in bulk: {e}")
+            return False
+
     def record_health_check(self, component: str, status: str, response_time_ms: int = None,
                            error_message: str = None, metadata: Dict = None) -> bool:
         """Record a health check result."""

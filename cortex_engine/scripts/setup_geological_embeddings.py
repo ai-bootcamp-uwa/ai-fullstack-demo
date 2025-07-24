@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
-import asyncio
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.snowflake_integration import SnowflakeVectorStore
-from src.data_client import DataFoundationClient
 from src.embedding import EmbeddingGenerator
+import requests
 
-async def main():
+def main():
     print("🔧 Setting up geological reports for embeddings...")
     # Step 1: Add embedding columns to existing table
     store = SnowflakeVectorStore()
@@ -23,7 +22,6 @@ async def main():
         print("✅ All reports already have embeddings!")
         return
     # Step 3: Fetch those specific reports from Module 1
-    data_client = DataFoundationClient()
     print("📥 Fetching reports in batches...")
     all_reports = []
     batch_size = 500  # Fetch 500 at a time
@@ -31,10 +29,15 @@ async def main():
     for offset in range(0, total_needed, batch_size):
         current_limit = min(batch_size, total_needed - offset)
         print(f"   Fetching batch: offset={offset}, limit={current_limit}")
-        batch_reports = await data_client.fetch_reports(limit=current_limit, offset=offset)
+        response = requests.get(
+            "http://localhost:8000/reports",
+            params={"limit": current_limit, "offset": offset},
+            timeout=120
+        )
+        response.raise_for_status()
+        batch_reports = response.json()
         all_reports.extend(batch_reports)
         if len(batch_reports) < current_limit:
-            # Reached end of available reports
             break
     print(f"📊 Fetched {len(all_reports)} reports total")
     # Filter to only the ones needing embeddings
@@ -43,8 +46,8 @@ async def main():
         if r.get("ANUMBER") in report_ids_needing_embeddings and r.get("TITLE")
     ]
     print(f"🎯 Processing {len(reports_to_process)} reports")
-    # Step 4: Process in batches
-    BATCH_SIZE = 25
+    # Step 4: Process in batches using bulk operations
+    BATCH_SIZE = 100
     total_processed = 0
     embedder = EmbeddingGenerator(use_hybrid=True)
     for i in range(0, len(reports_to_process), BATCH_SIZE):
@@ -52,19 +55,23 @@ async def main():
         batch_num = i // BATCH_SIZE + 1
         total_batches = (len(reports_to_process) + BATCH_SIZE - 1) // BATCH_SIZE
         print(f"📦 Processing batch {batch_num}/{total_batches}: {len(batch)} reports")
-        for report in batch:
-            title = report.get("TITLE")
-            anumber = report.get("ANUMBER")
-            # Generate embedding
-            embeddings = embedder.generate_embeddings([title])
-            embedding_vector = embeddings[0].tolist()
-            # Store in existing GEOLOGICAL_REPORTS table
-            success = store.store_embedding(anumber, title, embedding_vector)
-            if success:
-                total_processed += 1
-                if total_processed % 10 == 0:
-                    print(f"   ✅ Processed {total_processed}/{len(reports_to_process)} reports")
+        batch_titles = [report.get("TITLE") for report in batch]
+        batch_anumbers = [report.get("ANUMBER") for report in batch]
+        embeddings = embedder.generate_embeddings(batch_titles)
+        embedding_data = []
+        for i, (anumber, title) in enumerate(zip(batch_anumbers, batch_titles)):
+            embedding_data.append({
+                'report_id': anumber,
+                'embedding_vector': embeddings[i].tolist(),
+                'model_used': 'text-embedding-ada-002'
+            })
+        success = store.store_embeddings_bulk(embedding_data)
+        if success:
+            total_processed += len(batch)
+            print(f"   ✅ Processed {total_processed}/{len(reports_to_process)} reports")
+        else:
+            print(f"   ❌ Failed to process batch {batch_num}")
     print(f"🎉 Completed! Processed {total_processed} embeddings")
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
