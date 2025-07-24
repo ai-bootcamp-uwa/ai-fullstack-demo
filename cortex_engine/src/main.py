@@ -30,20 +30,20 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(
-    title="Cortex Engine Hybrid API", 
+    title="Cortex Engine Hybrid API",
     description="AI/Vector Processing with Azure OpenAI + Snowflake Hybrid System",
     version="2.0.0"
 )
 
-# Legacy components (for backward compatibility)
-embedding_generator = EmbeddingGenerator()
-vector_store = VectorStore()
-similarity_search = SimilaritySearch(vector_store)
+# Use only the Snowflake-backed vector store
+embedding_generator = EmbeddingGenerator(use_hybrid=True)
+vector_store = VectorStore(use_snowflake=True)
+similarity_search = SimilaritySearch(vector_store, use_hybrid=True)
 
 # New hybrid components (Phase 2)
-hybrid_embedding_generator = EmbeddingGenerator(use_hybrid=True)
-hybrid_vector_store = VectorStore(use_snowflake=True)
-hybrid_similarity_search = SimilaritySearch(hybrid_vector_store, use_hybrid=True)
+hybrid_embedding_generator = embedding_generator
+hybrid_vector_store = vector_store
+hybrid_similarity_search = similarity_search
 title_processor = TitleProcessor(use_hybrid=True, use_snowflake=True)
 
 # ===== EXISTING PYDANTIC MODELS (unchanged) =====
@@ -193,10 +193,10 @@ def rag_query_endpoint(request: RAGQueryRequest):
 def hybrid_embed_endpoint(request: HybridEmbedRequest):
     """Generate embeddings using hybrid Azure OpenAI configuration with optional title processing."""
     start_time = time.time()
-    
+
     if not hybrid_embedding_generator.is_configured():
         raise HTTPException(status_code=503, detail="Hybrid embedding generator not configured")
-    
+
     try:
         if request.use_title_processing:
             # Use title processor for quality filtering and preprocessing
@@ -206,11 +206,11 @@ def hybrid_embed_endpoint(request: HybridEmbedRequest):
                 store_results=request.store_results,
                 batch_size=min(len(request.data), 50)  # Limit batch size for API
             )
-            
+
             successful_results = [r for r in results if r.success]
             embeddings = [r.embedding for r in successful_results if r.embedding is not None]
             metadata = [r.metadata for r in successful_results]
-            
+
             processing_stats = {
                 "total_texts": len(request.data),
                 "processed_texts": batch_stats.successful,
@@ -222,20 +222,20 @@ def hybrid_embed_endpoint(request: HybridEmbedRequest):
             # Direct embedding generation
             embeddings = hybrid_embedding_generator.generate_embeddings(request.data)
             metadata = [{"source": "hybrid_embed", "text": text} for text in request.data]
-            
+
             processing_stats = {
                 "total_texts": len(request.data),
                 "processed_texts": len(embeddings),
                 "skipped_texts": 0,
                 "processing_time_ms": int((time.time() - start_time) * 1000)
             }
-        
+
         return {
             "embeddings": [emb.tolist() if hasattr(emb, 'tolist') else emb for emb in embeddings],
             "metadata": metadata,
             "processing_stats": processing_stats
         }
-        
+
     except Exception as e:
         logger.error(f"Hybrid embedding failed: {e}")
         raise HTTPException(status_code=500, detail=f"Embedding generation failed: {str(e)}")
@@ -244,43 +244,43 @@ def hybrid_embed_endpoint(request: HybridEmbedRequest):
 def vector_search_endpoint(request: VectorSearchRequest):
     """Perform vector similarity search with multiple query types and backend options."""
     start_time = time.time()
-    
+
     try:
         # Determine search method based on input
         if request.query_vector is not None:
             # Direct vector search
             query_vector = np.array(request.query_vector)
             results = hybrid_similarity_search.search(
-                query_vector, 
-                top_k=request.top_k, 
+                query_vector,
+                top_k=request.top_k,
                 use_snowflake=request.use_snowflake
             )
             query_type = "vector"
-            
+
         elif request.query_text is not None:
             # Text-based search
             results = hybrid_similarity_search.search_by_text(
-                request.query_text, 
-                top_k=request.top_k, 
+                request.query_text,
+                top_k=request.top_k,
                 use_snowflake=request.use_snowflake
             )
             query_type = "text"
-            
+
         elif request.query_title is not None:
             # Title-specific search
             results = hybrid_similarity_search.search_titles(
-                request.query_title, 
-                top_k=request.top_k, 
+                request.query_title,
+                top_k=request.top_k,
                 use_snowflake=request.use_snowflake,
                 preprocess=request.preprocess_title
             )
             query_type = "title"
-            
+
         else:
             raise HTTPException(status_code=400, detail="Must provide query_vector, query_text, or query_title")
-        
+
         search_time = int((time.time() - start_time) * 1000)
-        
+
         # Format results for API response
         formatted_results = []
         for idx, score, metadata in results:
@@ -289,7 +289,7 @@ def vector_search_endpoint(request: VectorSearchRequest):
                 "similarity_score": score,
                 "metadata": metadata
             })
-        
+
         return {
             "results": formatted_results,
             "search_metadata": {
@@ -300,7 +300,7 @@ def vector_search_endpoint(request: VectorSearchRequest):
                 "backend_used": "snowflake" if request.use_snowflake else "memory"
             }
         }
-        
+
     except Exception as e:
         logger.error(f"Vector search failed: {e}")
         raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
@@ -309,10 +309,10 @@ def vector_search_endpoint(request: VectorSearchRequest):
 def hybrid_rag_endpoint(request: HybridRAGRequest):
     """Perform retrieval-augmented generation with hybrid backends and search types."""
     start_time = time.time()
-    
+
     if not hybrid_similarity_search.client:
         raise HTTPException(status_code=503, detail="RAG client not configured")
-    
+
     try:
         if request.compare_backends:
             # Use hybrid RAG for backend comparison
@@ -327,17 +327,17 @@ def hybrid_rag_endpoint(request: HybridRAGRequest):
                 use_snowflake=request.use_snowflake,
                 search_type=request.search_type
             )
-        
+
         rag_time = int((time.time() - start_time) * 1000)
-        
+
         # Add timing information
         result["rag_time_ms"] = rag_time
-        
+
         return {
             "result": result.get("result", ""),
             "metadata": result
         }
-        
+
     except Exception as e:
         logger.error(f"Hybrid RAG failed: {e}")
         raise HTTPException(status_code=500, detail=f"RAG query failed: {str(e)}")
@@ -346,10 +346,10 @@ def hybrid_rag_endpoint(request: HybridRAGRequest):
 def title_processing_endpoint(request: TitleProcessingRequest):
     """Process geological titles with quality assessment, preprocessing, and optional embedding generation."""
     start_time = time.time()
-    
+
     if not title_processor.embedding_generator.is_configured() and request.generate_embeddings:
         raise HTTPException(status_code=503, detail="Embedding generator not configured for title processing")
-    
+
     try:
         # Process titles in batch
         results, stats = title_processor.process_batch(
@@ -358,9 +358,9 @@ def title_processing_endpoint(request: TitleProcessingRequest):
             store_results=request.store_results,
             batch_size=request.batch_size
         )
-        
+
         processing_time = int((time.time() - start_time) * 1000)
-        
+
         # Format results for API response
         formatted_results = []
         for result in results:
@@ -373,7 +373,7 @@ def title_processing_endpoint(request: TitleProcessingRequest):
                 "metadata": result.metadata,
                 "has_embedding": result.embedding is not None
             })
-        
+
         return {
             "results": formatted_results,
             "stats": {
@@ -386,7 +386,7 @@ def title_processing_endpoint(request: TitleProcessingRequest):
                 "api_processing_time_ms": processing_time
             }
         }
-        
+
     except Exception as e:
         logger.error(f"Title processing failed: {e}")
         raise HTTPException(status_code=500, detail=f"Title processing failed: {str(e)}")
@@ -395,22 +395,22 @@ def title_processing_endpoint(request: TitleProcessingRequest):
 def hybrid_health_check():
     """Comprehensive health check for the hybrid Azure OpenAI + Snowflake system."""
     start_time = time.time()
-    
+
     # Check all configurations
     validation_results = unified_config.validate_all()
-    
+
     # Test Azure OpenAI connection
     azure_health = {
         "configured": validation_results["azure_openai"]["configured"],
         "valid": validation_results["azure_openai"]["valid"],
         "error": validation_results["azure_openai"]["error"]
     }
-    
+
     # Test Snowflake connection and record health check
     snowflake_start = time.time()
     snowflake_connected = snowflake_vector_store.test_connection()
     snowflake_response_time = int((time.time() - snowflake_start) * 1000)
-    
+
     snowflake_health = {
         "configured": validation_results["snowflake"]["configured"],
         "valid": validation_results["snowflake"]["valid"],
@@ -418,7 +418,7 @@ def hybrid_health_check():
         "response_time_ms": snowflake_response_time,
         "error": validation_results["snowflake"]["error"]
     }
-    
+
     # Record health check in Snowflake if possible
     if snowflake_connected:
         snowflake_vector_store.record_health_check(
@@ -431,16 +431,16 @@ def hybrid_health_check():
                 "hybrid_enabled": unified_config.hybrid.is_hybrid_enabled()
             }
         )
-    
+
     # Determine overall health
     overall_health = "HEALTHY"
     if not azure_health["valid"] or not snowflake_health["valid"]:
         overall_health = "DEGRADED"
     if not azure_health["configured"] and not snowflake_health["configured"]:
         overall_health = "UNHEALTHY"
-    
+
     response_time_ms = int((time.time() - start_time) * 1000)
-    
+
     return {
         "status": "ok",
         "components": {
@@ -464,7 +464,7 @@ def hybrid_health_check():
 def get_hybrid_configuration():
     """Get detailed hybrid system configuration (without sensitive data)."""
     validation_results = unified_config.validate_all()
-    
+
     return {
         "azure_openai": {
             "endpoint": unified_config.azure_openai.endpoint,
@@ -499,15 +499,15 @@ def get_vector_statistics():
     """Get statistics about stored vectors and Snowflake vector operations."""
     if not unified_config.hybrid.is_hybrid_enabled():
         raise HTTPException(status_code=404, detail="Hybrid features are not enabled")
-    
+
     if not snowflake_vector_store.test_connection():
         return {
             "snowflake_stats": {"error": "Snowflake connection failed"},
             "connection_status": "FAILED"
         }
-    
+
     stats = snowflake_vector_store.get_vector_statistics()
-    
+
     return {
         "snowflake_stats": stats,
         "connection_status": "CONNECTED" if "error" not in stats else "ERROR"
@@ -518,20 +518,20 @@ def get_detailed_hybrid_status():
     """Detailed status information for hybrid system administration."""
     if not unified_config.hybrid.is_hybrid_enabled():
         raise HTTPException(status_code=404, detail="Hybrid features are not enabled")
-    
+
     # Get comprehensive system status
     validation_results = unified_config.validate_all()
     vector_stats = snowflake_vector_store.get_vector_statistics()
-    
+
     # Test connections
     azure_test_start = time.time()
     azure_configured = unified_config.azure_openai.is_configured()
     azure_response_time = int((time.time() - azure_test_start) * 1000)
-    
+
     snowflake_test_start = time.time()
     snowflake_connected = snowflake_vector_store.test_connection()
     snowflake_response_time = int((time.time() - snowflake_test_start) * 1000)
-    
+
     return {
         "system_status": {
             "timestamp": time.time(),
@@ -564,17 +564,17 @@ def system_status_endpoint():
     try:
         # Get storage information
         memory_storage = vector_store.get_storage_info()
-        hybrid_storage = hybrid_vector_store.get_storage_info()
-        
+        hybrid_storage = vector_store.get_storage_info() # Use the single vector_store
+
         # Get search statistics
-        search_stats = hybrid_similarity_search.get_search_stats()
-        
+        search_stats = similarity_search.get_search_stats()
+
         # Get processor statistics
         processor_stats = title_processor.get_processing_stats()
-        
+
         # Get configuration validation
         config_validation = unified_config.validate_all()
-        
+
         return {
             "system_info": {
                 "api_version": "2.0.0",
@@ -586,21 +586,21 @@ def system_status_endpoint():
                 "hybrid_storage": hybrid_storage,
                 "vector_counts": {
                     "memory": vector_store.get_vector_count(),
-                    "hybrid": hybrid_vector_store.get_vector_count()
+                    "hybrid": vector_store.get_vector_count()
                 }
             },
             "processing_capabilities": {
                 "embedding_generation": {
                     "legacy_configured": embedding_generator.is_configured(),
-                    "hybrid_configured": hybrid_embedding_generator.is_configured(),
-                    "dimension": hybrid_embedding_generator.get_embedding_dimension()
+                    "hybrid_configured": embedding_generator.is_configured(),
+                    "dimension": embedding_generator.get_embedding_dimension()
                 },
                 "similarity_search": search_stats,
                 "title_processing": processor_stats,
                 "rag_available": search_stats.get("rag_client_available", False)
             }
         }
-        
+
     except Exception as e:
         logger.error(f"System status failed: {e}")
         raise HTTPException(status_code=500, detail=f"System status unavailable: {str(e)}")
@@ -611,16 +611,16 @@ def reset_system():
     try:
         # Clear memory storage
         vector_store.clear()
-        
+
         # Note: We don't clear Snowflake storage for safety
         logger.info("System reset completed - memory storage cleared")
-        
+
         return {
             "status": "success",
             "message": "Memory storage cleared",
             "note": "Snowflake storage preserved for safety"
         }
-        
+
     except Exception as e:
         logger.error(f"System reset failed: {e}")
         raise HTTPException(status_code=500, detail=f"Reset failed: {str(e)}")
@@ -630,11 +630,11 @@ def validate_configuration():
     """Validate all system configurations (admin endpoint)."""
     try:
         validation_results = unified_config.validate_all()
-        
+
         # Test actual connections
-        azure_test = hybrid_embedding_generator.is_configured()
+        azure_test = embedding_generator.is_configured()
         snowflake_test = unified_config.snowflake.is_configured() and snowflake_vector_store.test_connection()
-        
+
         return {
             "configuration_validation": validation_results,
             "connection_tests": {
@@ -647,7 +647,7 @@ def validate_configuration():
                 "snowflake": "Configure SNOWFLAKE_* environment variables" if not snowflake_test else "✅ Ready"
             }
         }
-        
+
     except Exception as e:
         logger.error(f"Configuration validation failed: {e}")
         raise HTTPException(status_code=500, detail=f"Validation failed: {str(e)}")

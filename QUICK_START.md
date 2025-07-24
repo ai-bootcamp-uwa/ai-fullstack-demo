@@ -62,6 +62,9 @@ nano .env  # or use your preferred editor
 ```bash
 # Run the ETL pipeline (uploads only the first 1000 records by default)
 python scripts/migrate_to_snowflake.py
+python scripts/migrate_to_snowflake.py > migration_output.log 2>&1
+
+SELECT COUNT(*) FROM geological_reports;
 
 # To change the number of records uploaded (e.g., 500):
 python scripts/migrate_to_snowflake.py --max-records 500
