@@ -96,8 +96,8 @@ class VectorStore:
     def _search_snowflake(self, query_vector, top_k=5):
         """Search using Snowflake vector similarity."""
         query_vector_list = np.array(query_vector).tolist()
-        # Use positional arguments
-        similar_embeddings = self.snowflake_store.search_similar_titles(
+        # Use similarity_search method that works without Snowflake vector functions
+        similar_embeddings = self.snowflake_store.similarity_search(
             query_vector_list, top_k
         )
         results = []

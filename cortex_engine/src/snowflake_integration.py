@@ -373,7 +373,7 @@ class SnowflakeVectorStore:
                       r.REPORT_YEAR,
                       s.index AS idx,
                       s.value::FLOAT AS stored_value,
-                      q.qv[s.index + 1]::FLOAT AS query_value
+                      q.qv[s.index]::FLOAT AS query_value
                     FROM GEOLOGICAL_REPORTS r
                     CROSS JOIN query_vector q
                     , TABLE(FLATTEN(input => r.TITLE_EMBEDDING)) s
@@ -449,7 +449,7 @@ class SnowflakeVectorStore:
                       r.REPORT_YEAR,
                       s.index AS idx,
                       s.value::FLOAT AS stored_value,
-                      q.qv[s.index + 1]::FLOAT AS query_value
+                      q.qv[s.index]::FLOAT AS query_value
                     FROM GEOLOGICAL_REPORTS r
                     CROSS JOIN query_vector q
                     , TABLE(FLATTEN(input => r.TITLE_EMBEDDING)) s
