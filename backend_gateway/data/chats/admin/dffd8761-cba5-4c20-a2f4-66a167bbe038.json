@@ -1,0 +1,18 @@
+{
+  "session": {
+    "chat_id": "dffd8761-cba5-4c20-a2f4-66a167bbe038",
+    "user_id": "admin",
+    "title": "Geological Exploration Chat",
+    "created_at": "2025-07-25 07:47:48.887833",
+    "updated_at": "2025-07-25 07:47:48.892071",
+    "message_count": 1
+  },
+  "messages": [
+    {
+      "message_id": "aab5de5c-aefe-4e59-a699-e67c92b528fb",
+      "role": "user",
+      "content": "What is the weather in Tokyo?",
+      "timestamp": "2025-07-25 07:47:48.890762"
+    }
+  ]
+}

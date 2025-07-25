@@ -5,14 +5,13 @@ import { api, getAuthToken } from "./api";
 export const useGeologicalRuntime = () => {
   return useChatRuntime({
     api: "/api/chat/geological",
-    // Temporarily disable auth headers to test basic functionality
-    // headers: async (): Promise<Record<string, string>> => {
-    //   const token = getAuthToken();
-    //   if (token) {
-    //     return { Authorization: `Bearer ${token}` };
-    //   }
-    //   return {};
-    // },
+    headers: async (): Promise<Record<string, string>> => {
+      const token = getAuthToken();
+      if (token) {
+        return { Authorization: `Bearer ${token}` };
+      }
+      return {};
+    },
   });
 };
 
@@ -26,25 +25,25 @@ export const geologicalTools = {
       properties: {
         siteId: {
           type: "string",
-          description: "The ID of the geological site"
-        }
+          description: "The ID of the geological site",
+        },
       },
-      required: ["siteId"]
+      required: ["siteId"],
     },
     execute: async ({ siteId }: { siteId: string }) => {
       try {
         const response = await api.geological.getSite(siteId);
         return {
           success: true,
-          data: response.data
+          data: response.data,
         };
       } catch {
         return {
           success: false,
-          error: "Failed to fetch site information"
+          error: "Failed to fetch site information",
         };
       }
-    }
+    },
   },
 
   // Tool to filter geological sites
@@ -55,25 +54,25 @@ export const geologicalTools = {
       properties: {
         filters: {
           type: "object",
-          description: "Filter criteria for geological sites"
-        }
+          description: "Filter criteria for geological sites",
+        },
       },
-      required: ["filters"]
+      required: ["filters"],
     },
     execute: async ({ filters }: { filters: Record<string, unknown> }) => {
       try {
         const response = await api.geological.filterSites(filters);
         return {
           success: true,
-          data: response.data
+          data: response.data,
         };
       } catch {
         return {
           success: false,
-          error: "Failed to filter sites"
+          error: "Failed to filter sites",
         };
       }
-    }
+    },
   },
 
   // Tool to get site geometry
@@ -84,26 +83,26 @@ export const geologicalTools = {
       properties: {
         siteId: {
           type: "string",
-          description: "The ID of the geological site"
-        }
+          description: "The ID of the geological site",
+        },
       },
-      required: ["siteId"]
+      required: ["siteId"],
     },
     execute: async ({ siteId }: { siteId: string }) => {
       try {
         const response = await api.geological.getSiteGeometry(siteId);
         return {
           success: true,
-          data: response.data
+          data: response.data,
         };
       } catch {
         return {
           success: false,
-          error: "Failed to fetch site geometry"
+          error: "Failed to fetch site geometry",
         };
       }
-    }
-  }
+    },
+  },
 };
 
 // Runtime configuration with tools
@@ -111,4 +110,4 @@ export const useGeologicalRuntimeWithTools = () => {
   return useChatRuntime({
     api: "/api/chat/geological-tools",
   });
-}; 
+};

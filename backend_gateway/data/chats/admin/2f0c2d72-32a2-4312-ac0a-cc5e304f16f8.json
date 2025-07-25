@@ -1,0 +1,30 @@
+{
+  "session": {
+    "chat_id": "2f0c2d72-32a2-4312-ac0a-cc5e304f16f8",
+    "user_id": "admin",
+    "title": "Geological Chat",
+    "created_at": "2025-07-25 07:57:02.818512",
+    "updated_at": "2025-07-25 07:57:10.135522",
+    "message_count": 3
+  },
+  "messages": [
+    {
+      "message_id": "4666e283-5d57-4e36-a9d4-c8ec6d814043",
+      "role": "user",
+      "content": "Split Rock- Spear Hill -Cooglegong Creek Project, Non-statutory Report: Report of an Investigation of Split Rock Propert",
+      "timestamp": "2025-07-25 07:57:02.821569"
+    },
+    {
+      "message_id": "4c1cd655-90ad-44c8-956b-5f76821ca417",
+      "role": "user",
+      "content": "Split Rock- Spear Hill -Cooglegong Creek Project, Non-statutory Report: Report of an Investigation of Split Rock Propert",
+      "timestamp": "2025-07-25 07:57:02.829909"
+    },
+    {
+      "message_id": "a3c85f0e-7488-4fde-bb46-964f4f3525f4",
+      "role": "assistant",
+      "content": "The provided context does not contain any information related to the Split Rock- Spear Hill - Cooglegong Creek Project or a report of an investigation of the Split Rock property. Therefore, I am unable to provide details or a summary of the non-statutory report based on the given data. If you have more specific information or additional documents, please provide them so I can assist you further.",
+      "timestamp": "2025-07-25 07:57:10.132606"
+    }
+  ]
+}

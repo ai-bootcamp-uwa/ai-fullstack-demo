@@ -1,0 +1,30 @@
+{
+  "session": {
+    "chat_id": "d3e0a767-ed42-44a5-a3ca-64aa1d9c4de8",
+    "user_id": "admin",
+    "title": "Geological Chat",
+    "created_at": "2025-07-25 07:45:15.803477",
+    "updated_at": "2025-07-25 07:47:03.443218",
+    "message_count": 3
+  },
+  "messages": [
+    {
+      "message_id": "ac555dfb-6503-4d5b-a955-ac856bfa849b",
+      "role": "user",
+      "content": "Hello",
+      "timestamp": "2025-07-25 07:45:15.807346"
+    },
+    {
+      "message_id": "4149c04f-686e-4464-ab1b-48169247c956",
+      "role": "user",
+      "content": "What is the weather in Tokyo?",
+      "timestamp": "2025-07-25 07:46:53.105388"
+    },
+    {
+      "message_id": "62cda383-fd08-4ded-9873-07c22fc47db6",
+      "role": "assistant",
+      "content": "The provided context does not contain any information about the weather in Tokyo. Therefore, I am unable to provide an answer based on the given documents.",
+      "timestamp": "2025-07-25 07:47:03.441610"
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "session": {
+    "chat_id": "692372d8-f203-4aaf-bab5-fab43969f9f2",
+    "user_id": "admin",
+    "title": "Geological Chat",
+    "created_at": "2025-07-25 07:42:44.002798",
+    "updated_at": "2025-07-25 07:42:44.009403",
+    "message_count": 1
+  },
+  "messages": [
+    {
+      "message_id": "dd60a71e-3539-448a-8c85-7d36c9ac5879",
+      "role": "user",
+      "content": "Hello",
+      "timestamp": "2025-07-25 07:42:44.007965"
+    }
+  ]
+}
