@@ -13,7 +13,7 @@ def fetch_reports_in_batches(report_ids, batch_size=1000):
     needed_ids = set(report_ids)
     collected_reports = []
     offset = 0
-    limit = 1000
+    limit = 2000
     while len(collected_reports) < len(report_ids):
         try:
             print(f"   Fetching reports: offset={offset}, limit={limit}")
@@ -81,9 +81,14 @@ def main():
         for report in all_reports:
             if not isinstance(report, dict):
                 continue
-            # Handle different field name formats
-            anumber = report.get("ANUMBER") or report.get("anumber") or report.get("id")
-            title = report.get("TITLE") or report.get("title")
+            # Handle different field name formats (case-insensitive)
+            def get_key(d, *keys):
+                for k in keys:
+                    if k in d:
+                        return d[k]
+                return None
+            anumber = get_key(report, "ANUMBER", "anumber", "id")
+            title = get_key(report, "TITLE", "title")
             if anumber in report_ids_needing_embeddings and title:
                 reports_to_process.append({
                     "ANUMBER": anumber,
