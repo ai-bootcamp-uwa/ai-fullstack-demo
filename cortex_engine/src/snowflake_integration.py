@@ -349,73 +349,126 @@ class SnowflakeVectorStore:
             return False
 
     def search_similar_titles(self, query_embedding: List[float], limit: int = 10) -> List[Dict[str, Any]]:
-        """Search for similar titles using array-based similarity calculation from GEOLOGICAL_REPORTS."""
+        """Search for similar titles using standard Snowflake SQL functions (manual cosine similarity)."""
         if not self.test_connection():
             logger.error("Cannot search: Snowflake connection failed")
             return []
         try:
-            with self.get_connection() as conn:
+            conn_params = self.config.get_connection_params()
+            raw_conn = snowflake.connector.connect(**conn_params)
+            try:
+                cursor = raw_conn.cursor(snowflake.connector.DictCursor)
+                query_json = json.dumps(query_embedding)
                 search_sql = """
+                WITH query_vector AS (
+                    SELECT PARSE_JSON(%s) as qv
+                ),
+                vector_calculations AS (
+                    SELECT
+                        r.ANUMBER,
+                        r.TITLE,
+                        r.OPERATOR,
+                        r.TARGET_COMMODITIES,
+                        r.REPORT_YEAR,
+                        r.TITLE_EMBEDDING as stored_vec,
+                        q.qv as query_vec,
+                        (SELECT SUM(stored_vec[i].to_double() * query_vec[i].to_double())
+                         FROM TABLE(FLATTEN(stored_vec)) stored_item,
+                              TABLE(FLATTEN(query_vec)) query_item
+                         WHERE stored_item.index = query_item.index) as dot_product,
+                        SQRT((SELECT SUM(POW(stored_vec[i].to_double(), 2))
+                              FROM TABLE(FLATTEN(stored_vec)) item)) as stored_magnitude,
+                        SQRT((SELECT SUM(POW(query_vec[i].to_double(), 2))
+                              FROM TABLE(FLATTEN(query_vec)) item)) as query_magnitude
+                    FROM GEOLOGICAL_REPORTS r
+                    CROSS JOIN query_vector q
+                    WHERE r.TITLE_EMBEDDING IS NOT NULL
+                )
                 SELECT
                     ANUMBER,
                     TITLE,
                     OPERATOR,
                     TARGET_COMMODITIES,
                     REPORT_YEAR,
-                    ARRAY_INNER_PRODUCT(TITLE_EMBEDDING, PARSE_JSON(:query_vector)) /
-                    (SQRT(ARRAY_INNER_PRODUCT(TITLE_EMBEDDING, TITLE_EMBEDDING)) *
-                     SQRT(ARRAY_INNER_PRODUCT(PARSE_JSON(:query_vector), PARSE_JSON(:query_vector)))) as similarity_score,
-                    EMBEDDING_CREATED_AT
-                FROM GEOLOGICAL_REPORTS
-                WHERE TITLE_EMBEDDING IS NOT NULL
+                    CASE
+                        WHEN stored_magnitude > 0 AND query_magnitude > 0
+                        THEN dot_product / (stored_magnitude * query_magnitude)
+                        ELSE 0.0
+                    END as similarity_score
+                FROM vector_calculations
+                WHERE similarity_score > 0.1
                 ORDER BY similarity_score DESC
-                LIMIT :limit
+                LIMIT %s
                 """
-                query_vector_json = json.dumps(query_embedding)
-                results = conn.execute(text(search_sql), {
-                    "query_vector": query_vector_json,
-                    "limit": limit
-                }).fetchall()
+                cursor.execute(search_sql, (query_json, limit))
+                results = cursor.fetchall()
                 return [
                     {
-                        "report_id": row[0],  # ANUMBER
-                        "title_text": row[1], # TITLE
-                        "similarity_score": float(row[5]) if row[5] else 0.0,  # similarity_score
-                        "operator": row[2],   # OPERATOR
-                        "commodities": row[3], # TARGET_COMMODITIES
-                        "year": row[4]        # REPORT_YEAR
+                        "report_id": row['ANUMBER'],
+                        "title_text": row['TITLE'],
+                        "similarity_score": float(row['SIMILARITY_SCORE']) if row['SIMILARITY_SCORE'] else 0.0,
+                        "operator": row['OPERATOR'],
+                        "commodities": row['TARGET_COMMODITIES'],
+                        "year": row['REPORT_YEAR']
                     }
                     for row in results
                 ]
+            finally:
+                raw_conn.close()
         except Exception as e:
             logger.error(f"Failed to search similar titles: {e}")
             return []
 
     def similarity_search(self, query_embedding: List[float], top_k: int = 5) -> List[Dict[str, Any]]:
-        """Search using embeddings stored in GEOLOGICAL_REPORTS table"""
+        """Search using embeddings stored in GEOLOGICAL_REPORTS table with manual cosine similarity."""
         try:
             conn_params = self.config.get_connection_params()
             raw_conn = snowflake.connector.connect(**conn_params)
             try:
-                cursor = raw_conn.cursor(DictCursor)
+                cursor = raw_conn.cursor(snowflake.connector.DictCursor)
                 query_json = json.dumps(query_embedding)
                 search_sql = """
+                WITH query_vector AS (
+                    SELECT PARSE_JSON(%s) as qv
+                ),
+                vector_calculations AS (
+                    SELECT
+                        r.ANUMBER,
+                        r.TITLE,
+                        r.OPERATOR,
+                        r.TARGET_COMMODITIES,
+                        r.REPORT_YEAR,
+                        r.TITLE_EMBEDDING as stored_vec,
+                        q.qv as query_vec,
+                        (SELECT SUM(stored_vec[i].to_double() * query_vec[i].to_double())
+                         FROM TABLE(FLATTEN(stored_vec)) stored_item,
+                              TABLE(FLATTEN(query_vec)) query_item
+                         WHERE stored_item.index = query_item.index) as dot_product,
+                        SQRT((SELECT SUM(POW(stored_vec[i].to_double(), 2))
+                              FROM TABLE(FLATTEN(stored_vec)) item)) as stored_magnitude,
+                        SQRT((SELECT SUM(POW(query_vec[i].to_double(), 2))
+                              FROM TABLE(FLATTEN(query_vec)) item)) as query_magnitude
+                    FROM GEOLOGICAL_REPORTS r
+                    CROSS JOIN query_vector q
+                    WHERE r.TITLE_EMBEDDING IS NOT NULL
+                )
                 SELECT
                     ANUMBER,
                     TITLE,
                     OPERATOR,
                     TARGET_COMMODITIES,
                     REPORT_YEAR,
-                    ARRAY_INNER_PRODUCT(TITLE_EMBEDDING, PARSE_JSON(%s)) /
-                    (SQRT(ARRAY_INNER_PRODUCT(TITLE_EMBEDDING, TITLE_EMBEDDING)) *
-                     SQRT(ARRAY_INNER_PRODUCT(PARSE_JSON(%s), PARSE_JSON(%s)))) as similarity_score,
-                    EMBEDDING_CREATED_AT
-                FROM GEOLOGICAL_REPORTS
-                WHERE TITLE_EMBEDDING IS NOT NULL
+                    CASE
+                        WHEN stored_magnitude > 0 AND query_magnitude > 0
+                        THEN dot_product / (stored_magnitude * query_magnitude)
+                        ELSE 0.0
+                    END as similarity_score
+                FROM vector_calculations
+                WHERE similarity_score > 0.1
                 ORDER BY similarity_score DESC
                 LIMIT %s
                 """
-                cursor.execute(search_sql, (query_json, query_json, query_json, top_k))
+                cursor.execute(search_sql, (query_json, top_k))
                 results = cursor.fetchall()
                 formatted_results = []
                 for row in results:
