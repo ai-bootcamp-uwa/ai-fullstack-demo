@@ -248,32 +248,46 @@ class SnowflakeMigrationPipeline:
     def migrate_data(self, shapefile_path: Path, conflict_resolution: str = 'skip') -> bool:
         """Migrate data from shapefile to Snowflake with conflict handling"""
         logger.info(f"Starting data migration from {shapefile_path}")
-        if conflict_resolution == 'skip':
-            logger.info("🔄 Checking for existing data to skip conflicts...")
-            try:
+        try:
+            if conflict_resolution == 'skip':
+                logger.info("🔄 Checking for existing data to skip conflicts...")
+                conflict_info = self.check_existing_data(shapefile_path)
+                if not self.handle_data_conflicts(conflict_info, conflict_resolution):
+                    return False
+                if conflict_info['conflicts']:
+                    # Use filtering approach for skip
+                    records_loaded = self._load_with_anumber_filter(
+                        shapefile_path,
+                        exclude_anumbers=conflict_info['conflicts']
+                    )
+                else:
+                    # No conflicts, load normally but without truncate
+                    records_loaded = snowflake_client.load_shapefile_data_append_only(
+                        str(shapefile_path),
+                        max_records=self.max_records
+                    )
+            elif conflict_resolution == 'replace':
+                logger.info("🔄 Will replace existing records...")
                 records_loaded = snowflake_client.load_shapefile_data(
                     str(shapefile_path),
                     max_records=self.max_records
                 )
-            except Exception as e:
-                logger.error(f"❌ Data migration failed: {e}")
-                self.stats['errors'].append(f"Data migration failed: {e}")
-                return False
-        elif conflict_resolution == 'replace':
-            logger.info("🔄 Will replace existing records...")
-            records_loaded = snowflake_client.load_shapefile_data(
-                str(shapefile_path),
-                max_records=self.max_records
-            )
-        else:  # fail
-            logger.info("🔄 Will fail on conflicts...")
-            records_loaded = snowflake_client.load_shapefile_data(
-                str(shapefile_path),
-                max_records=self.max_records
-            )
-        self.stats['records_loaded'] = records_loaded
-        logger.info(f"✅ Successfully loaded {records_loaded} records to Snowflake")
-        return self.verify_migration()
+            else:  # fail
+                logger.info("🔄 Checking for conflicts...")
+                conflict_info = self.check_existing_data(shapefile_path)
+                if not self.handle_data_conflicts(conflict_info, conflict_resolution):
+                    return False
+                records_loaded = snowflake_client.load_shapefile_data(
+                    str(shapefile_path),
+                    max_records=self.max_records
+                )
+            self.stats['records_loaded'] = records_loaded
+            logger.info(f"✅ Successfully loaded {records_loaded} records to Snowflake")
+            return self.verify_migration()
+        except Exception as e:
+            logger.error(f"❌ Data migration failed: {e}")
+            self.stats['errors'].append(f"Data migration failed: {e}")
+            return False
 
     def verify_migration(self) -> bool:
         """Verify that data was successfully migrated"""

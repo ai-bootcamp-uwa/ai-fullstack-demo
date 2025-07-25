@@ -428,6 +428,143 @@ class SnowflakeClient:
             logger.error(f"Failed to load shapefile data: {e}")
             raise
 
+    def load_shapefile_data_append_only(self, shapefile_path: str, max_records: int = None) -> int:
+        """Load data from shapefile into Snowflake WITHOUT truncating existing data (append-only)"""
+        try:
+            logger.info(f"Loading shapefile (append-only): {shapefile_path}")
+            import geopandas as gpd
+            gdf = gpd.read_file(shapefile_path)
+            if max_records is not None:
+                gdf = gdf.head(max_records).copy()
+                logger.info(f"Limiting upload to first {max_records} records.")
+            # Geometry to WKT
+            def safe_geometry_to_wkt(geom):
+                if geom is None or pd.isna(geom):
+                    return None
+                try:
+                    wkt = geom.wkt
+                    return wkt
+                except Exception:
+                    return None
+            gdf['geometry_wkt'] = gdf['geometry'].apply(safe_geometry_to_wkt)
+            df = pd.DataFrame(gdf.drop('geometry', axis=1))
+            column_mapping = {
+                'ANUMBER': 'ANUMBER',
+                'TITLE': 'TITLE',
+                'REPORT_YEA': 'REPORT_YEAR',
+                'AUTHOR_NAM': 'AUTHOR_NAME',
+                'AUTHOR_COM': 'AUTHOR_COMPANY',
+                'REPORT_TYP': 'REPORT_TYPE',
+                'DATE_FROM': 'DATE_FROM',
+                'DATE_TO': 'DATE_TO',
+                'PROJECT': 'PROJECT',
+                'OPERATOR': 'OPERATOR',
+                'ABSTRACT': 'ABSTRACT',
+                'KEYWORDS': 'KEYWORDS',
+                'TARGET_COM': 'TARGET_COMMODITIES',
+                'DATE_RELEA': 'DATE_RELEASED',
+                'ITEM_NO': 'ITEM_NO',
+                'DPXE_ABS': 'DPXE_ABS',
+                'DPXE_REP': 'DPXE_REP',
+                'EXTRACT_DA': 'EXTRACT_DATE',
+                'DIGITAL_FI': 'DIGITAL_FI',
+                'IS_SHAPED': 'IS_SHAPED',
+                'geometry_wkt': 'GEOMETRY'
+            }
+            existing_mapping = {k: v for k, v in column_mapping.items() if k in df.columns}
+            df = df.rename(columns=existing_mapping)
+            # Geometry validation and cleaning
+            if 'GEOMETRY' in df.columns:
+                logger.info("Validating geometries...")
+                def validate_and_clean_geometry(geom_wkt):
+                    if geom_wkt is None or pd.isna(geom_wkt):
+                        return None
+                    try:
+                        from shapely import wkt as shapely_wkt
+                        geom = shapely_wkt.loads(str(geom_wkt))
+                        if geom.is_valid:
+                            return geom.wkt
+                        else:
+                            from shapely.validation import make_valid
+                            fixed_geom = make_valid(geom)
+                            return fixed_geom.wkt if fixed_geom.is_valid else None
+                    except Exception:
+                        return None
+                df['GEOMETRY'] = df['GEOMETRY'].apply(validate_and_clean_geometry)
+                # Filter large or invalid geometries
+                def filter_large_geometries(geom_wkt):
+                    if geom_wkt is None or pd.isna(geom_wkt):
+                        return None
+                    geom_str = str(geom_wkt)
+                    try:
+                        from shapely import wkt as shapely_wkt
+                        parsed_geom = shapely_wkt.loads(geom_str)
+                        if not parsed_geom.is_valid:
+                            logger.debug(f"Invalid geometry detected, setting to NULL")
+                            return None
+                    except Exception:
+                        logger.debug(f"Failed to parse geometry WKT, setting to NULL")
+                        return None
+                    if len(geom_str) > 1000000:
+                        logger.warning(f"Geometry too large ({len(geom_str)} chars), setting to NULL")
+                        return None
+                    return geom_wkt
+                df['GEOMETRY'] = df['GEOMETRY'].apply(filter_large_geometries)
+            # Log data quality info
+            total_records = len(df)
+            uploaded_records = 0
+            chunk_size = 1000
+            num_chunks = (total_records + chunk_size - 1) // chunk_size
+            logger.info(f"Starting append-only upload: {total_records} records in {num_chunks} chunks of {chunk_size}.")
+            failed_records = 0
+            engine = self._get_engine()
+            for i in range(0, total_records, chunk_size):
+                chunk_start = i
+                chunk_end = min(i + chunk_size, total_records)
+                chunk_df = df.iloc[chunk_start:chunk_end]
+                chunk_num = (i // chunk_size) + 1
+                percent = (chunk_end / total_records) * 100
+                try:
+                    with self._suppress_sqlalchemy_logging():
+                        chunk_df.to_sql(
+                            'geological_reports',  # Use lowercase table name
+                            engine,
+                            if_exists='append',
+                            index=False,
+                            method='multi'
+                        )
+                    uploaded_records += len(chunk_df)
+                    if chunk_num % 10 == 0:
+                        logger.info(f"Progress: {chunk_num}/{num_chunks} chunks ({percent:.1f}% complete)")
+                except Exception as e:
+                    error_str = str(e)
+                    if "Geography validation" in error_str:
+                        clean_error = f"Geography validation error in chunk {chunk_num} - invalid WKT geometries detected"
+                        logger.error(clean_error)
+                        logger.info("💡 Try running with geometry validation enabled or check shapefile CRS")
+                    else:
+                        clean_error = self._handle_upload_error(e, f"chunk {chunk_num}")
+                        logger.error(clean_error)
+                    if len(chunk_df) > 0:
+                        sample = chunk_df.iloc[0]
+                        logger.error(f"Sample record: ANUMBER={sample.get('ANUMBER', 'N/A')}, "
+                                     f"TITLE='{str(sample.get('TITLE', 'N/A'))[:50]}...', "
+                                     f"GEOMETRY_length={len(str(sample.get('GEOMETRY', '')))}")
+                    logger.debug(f"Full chunk error details: {str(e)[:500]}...")
+                    failed_records += len(chunk_df)
+                    continue
+            logger.info(f"Successfully loaded {uploaded_records} records to Snowflake (append-only mode)")
+            if failed_records > 0:
+                logger.error(f"❌ DATA LOSS DETECTED: {failed_records} records failed to upload")
+                logger.error(f"Success rate: {(uploaded_records/total_records)*100:.1f}%")
+                logger.error("Check error logs above for specific chunk failures")
+            else:
+                logger.info(f"✅ All {uploaded_records} records uploaded successfully")
+            return uploaded_records
+        except Exception as e:
+            logger.error(f"Failed to load shapefile data (append-only): {e}")
+            raise
+
     def _handle_upload_error(self, error: Exception, context: str = "upload") -> str:
         """Convert verbose SQLAlchemy errors to clean, actionable messages"""
         error_str = str(error)

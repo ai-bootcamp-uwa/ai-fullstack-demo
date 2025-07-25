@@ -186,16 +186,29 @@ python scripts/migrate_to_snowflake.py --setup-only
 ### Step 4: Load Data to Snowflake
 
 ```bash
-# Option A: Load limited dataset (recommended for testing)
+# Option A: Load limited dataset (recommended for testing, skips existing records by default)
 python scripts/migrate_to_snowflake.py --max-records 1000
 python scripts/migrate_to_snowflake.py
 
-# Option B: Load full dataset (if you have large shapefile)
-# python scripts/load_full_dataset.py
+# Option B: Load full dataset (if you have large shapefile, skips existing records by default)
+python scripts/migrate_to_snowflake.py --max-records 100000
 
 # Option C: Custom shapefile path
 python scripts/migrate_to_snowflake.py --shapefile /path/to/your/data.shp --max-records 500
+
+# Option D: Check for existing conflicts only (no migration)
+python scripts/migrate_to_snowflake.py --check-existing
+
+# Option E: Force replace existing records
+python scripts/migrate_to_snowflake.py --force-replace
+
+# Option F: Fail if any conflicts exist
+python scripts/migrate_to_snowflake.py --fail-on-conflicts
 ```
+
+> **Note:**
+> By default, the migration script will **skip records that already exist in Snowflake** (based on ANUMBER).
+> Use `--force-replace` to overwrite, or `--fail-on-conflicts` to abort if any conflicts are found.
 
 **Expected Output:**
 
