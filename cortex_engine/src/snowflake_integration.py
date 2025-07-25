@@ -349,7 +349,7 @@ class SnowflakeVectorStore:
             return False
 
     def search_similar_titles(self, query_embedding: List[float], limit: int = 10) -> List[Dict[str, Any]]:
-        """Search for similar titles using array-based similarity calculation."""
+        """Search for similar titles using array-based similarity calculation from GEOLOGICAL_REPORTS."""
         if not self.test_connection():
             logger.error("Cannot search: Snowflake connection failed")
             return []
@@ -357,15 +357,17 @@ class SnowflakeVectorStore:
             with self.get_connection() as conn:
                 search_sql = """
                 SELECT
-                    te.report_id,
-                    te.title_text,
-                    ARRAY_INNER_PRODUCT(te.embedding_vector, PARSE_JSON(:query_vector)) /
-                    (SQRT(ARRAY_INNER_PRODUCT(te.embedding_vector, te.embedding_vector)) *
+                    ANUMBER,
+                    TITLE,
+                    OPERATOR,
+                    TARGET_COMMODITIES,
+                    REPORT_YEAR,
+                    ARRAY_INNER_PRODUCT(TITLE_EMBEDDING, PARSE_JSON(:query_vector)) /
+                    (SQRT(ARRAY_INNER_PRODUCT(TITLE_EMBEDDING, TITLE_EMBEDDING)) *
                      SQRT(ARRAY_INNER_PRODUCT(PARSE_JSON(:query_vector), PARSE_JSON(:query_vector)))) as similarity_score,
-                    te.model_used,
-                    te.created_at
-                FROM TITLE_EMBEDDINGS te
-                WHERE te.embedding_vector IS NOT NULL
+                    EMBEDDING_CREATED_AT
+                FROM GEOLOGICAL_REPORTS
+                WHERE TITLE_EMBEDDING IS NOT NULL
                 ORDER BY similarity_score DESC
                 LIMIT :limit
                 """
@@ -376,11 +378,12 @@ class SnowflakeVectorStore:
                 }).fetchall()
                 return [
                     {
-                        "report_id": row[0],
-                        "title_text": row[1],
-                        "similarity_score": float(row[2]) if row[2] else 0.0,
-                        "model_used": row[3],
-                        "created_at": str(row[4])
+                        "report_id": row[0],  # ANUMBER
+                        "title_text": row[1], # TITLE
+                        "similarity_score": float(row[5]) if row[5] else 0.0,  # similarity_score
+                        "operator": row[2],   # OPERATOR
+                        "commodities": row[3], # TARGET_COMMODITIES
+                        "year": row[4]        # REPORT_YEAR
                     }
                     for row in results
                 ]
