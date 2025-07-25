@@ -480,3 +480,9 @@ const handleMapAreaQuery = async (bounds: LatLngBounds) => {
 ✅ **Integrates with your data structure** (LATITUDE/LONGITUDE fields)
 ✅ **Chat integration ready** (spatial queries and site selection)
 ✅ **Professional geological context** (geological tile layers available)
+
+---
+
+## Migration Progress Log
+
+- [x] Integrated a real interactive map in GeologicalMap.tsx using react-leaflet, centered on Western Australia, with a basic OpenStreetMap tile layer. (Step completed)
