@@ -349,7 +349,7 @@ class SnowflakeVectorStore:
             return False
 
     def search_similar_titles(self, query_embedding: List[float], limit: int = 10) -> List[Dict[str, Any]]:
-        """Search for similar titles using standard Snowflake SQL functions (manual cosine similarity)."""
+        """Search for similar titles using robust CTE-based cosine similarity in Snowflake."""
         if not self.test_connection():
             logger.error("Cannot search: Snowflake connection failed")
             return []
@@ -360,43 +360,51 @@ class SnowflakeVectorStore:
                 cursor = raw_conn.cursor(snowflake.connector.DictCursor)
                 query_json = json.dumps(query_embedding)
                 search_sql = """
-                WITH query_vector AS (
-                    SELECT PARSE_JSON(%s) as qv
-                ),
-                vector_calculations AS (
+                WITH
+                  query_vector AS (
+                    SELECT PARSE_JSON(%s) AS qv
+                  ),
+                  flattened AS (
                     SELECT
-                        r.ANUMBER,
-                        r.TITLE,
-                        r.OPERATOR,
-                        r.TARGET_COMMODITIES,
-                        r.REPORT_YEAR,
-                        r.TITLE_EMBEDDING as stored_vec,
-                        q.qv as query_vec,
-                        (SELECT SUM(stored_vec[i].to_double() * query_vec[i].to_double())
-                         FROM TABLE(FLATTEN(stored_vec)) stored_item,
-                              TABLE(FLATTEN(query_vec)) query_item
-                         WHERE stored_item.index = query_item.index) as dot_product,
-                        SQRT((SELECT SUM(POW(stored_vec[i].to_double(), 2))
-                              FROM TABLE(FLATTEN(stored_vec)) item)) as stored_magnitude,
-                        SQRT((SELECT SUM(POW(query_vec[i].to_double(), 2))
-                              FROM TABLE(FLATTEN(query_vec)) item)) as query_magnitude
+                      r.ANUMBER,
+                      r.TITLE,
+                      r.OPERATOR,
+                      r.TARGET_COMMODITIES,
+                      r.REPORT_YEAR,
+                      s.index AS idx,
+                      s.value::FLOAT AS stored_value,
+                      q.qv[s.index + 1]::FLOAT AS query_value
                     FROM GEOLOGICAL_REPORTS r
                     CROSS JOIN query_vector q
+                    , TABLE(FLATTEN(input => r.TITLE_EMBEDDING)) s
                     WHERE r.TITLE_EMBEDDING IS NOT NULL
-                )
+                  ),
+                  aggregates AS (
+                    SELECT
+                      ANUMBER,
+                      TITLE,
+                      OPERATOR,
+                      TARGET_COMMODITIES,
+                      REPORT_YEAR,
+                      SUM(stored_value * query_value) AS dot_product,
+                      SQRT(SUM(POW(stored_value, 2))) AS stored_magnitude,
+                      SQRT(SUM(POW(query_value, 2))) AS query_magnitude
+                    FROM flattened
+                    GROUP BY ANUMBER, TITLE, OPERATOR, TARGET_COMMODITIES, REPORT_YEAR
+                  )
                 SELECT
-                    ANUMBER,
-                    TITLE,
-                    OPERATOR,
-                    TARGET_COMMODITIES,
-                    REPORT_YEAR,
-                    CASE
-                        WHEN stored_magnitude > 0 AND query_magnitude > 0
-                        THEN dot_product / (stored_magnitude * query_magnitude)
-                        ELSE 0.0
-                    END as similarity_score
-                FROM vector_calculations
-                WHERE similarity_score > 0.1
+                  ANUMBER,
+                  TITLE,
+                  OPERATOR,
+                  TARGET_COMMODITIES,
+                  REPORT_YEAR,
+                  CASE
+                    WHEN stored_magnitude > 0 AND query_magnitude > 0
+                    THEN dot_product / (stored_magnitude * query_magnitude)
+                    ELSE 0.0
+                  END AS similarity_score
+                FROM aggregates
+                WHERE similarity_score >= 0
                 ORDER BY similarity_score DESC
                 LIMIT %s
                 """
@@ -420,7 +428,7 @@ class SnowflakeVectorStore:
             return []
 
     def similarity_search(self, query_embedding: List[float], top_k: int = 5) -> List[Dict[str, Any]]:
-        """Search using embeddings stored in GEOLOGICAL_REPORTS table with manual cosine similarity."""
+        """Search using embeddings stored in GEOLOGICAL_REPORTS table with robust CTE-based cosine similarity in Snowflake."""
         try:
             conn_params = self.config.get_connection_params()
             raw_conn = snowflake.connector.connect(**conn_params)
@@ -428,43 +436,51 @@ class SnowflakeVectorStore:
                 cursor = raw_conn.cursor(snowflake.connector.DictCursor)
                 query_json = json.dumps(query_embedding)
                 search_sql = """
-                WITH query_vector AS (
-                    SELECT PARSE_JSON(%s) as qv
-                ),
-                vector_calculations AS (
+                WITH
+                  query_vector AS (
+                    SELECT PARSE_JSON(%s) AS qv
+                  ),
+                  flattened AS (
                     SELECT
-                        r.ANUMBER,
-                        r.TITLE,
-                        r.OPERATOR,
-                        r.TARGET_COMMODITIES,
-                        r.REPORT_YEAR,
-                        r.TITLE_EMBEDDING as stored_vec,
-                        q.qv as query_vec,
-                        (SELECT SUM(stored_vec[i].to_double() * query_vec[i].to_double())
-                         FROM TABLE(FLATTEN(stored_vec)) stored_item,
-                              TABLE(FLATTEN(query_vec)) query_item
-                         WHERE stored_item.index = query_item.index) as dot_product,
-                        SQRT((SELECT SUM(POW(stored_vec[i].to_double(), 2))
-                              FROM TABLE(FLATTEN(stored_vec)) item)) as stored_magnitude,
-                        SQRT((SELECT SUM(POW(query_vec[i].to_double(), 2))
-                              FROM TABLE(FLATTEN(query_vec)) item)) as query_magnitude
+                      r.ANUMBER,
+                      r.TITLE,
+                      r.OPERATOR,
+                      r.TARGET_COMMODITIES,
+                      r.REPORT_YEAR,
+                      s.index AS idx,
+                      s.value::FLOAT AS stored_value,
+                      q.qv[s.index + 1]::FLOAT AS query_value
                     FROM GEOLOGICAL_REPORTS r
                     CROSS JOIN query_vector q
+                    , TABLE(FLATTEN(input => r.TITLE_EMBEDDING)) s
                     WHERE r.TITLE_EMBEDDING IS NOT NULL
-                )
+                  ),
+                  aggregates AS (
+                    SELECT
+                      ANUMBER,
+                      TITLE,
+                      OPERATOR,
+                      TARGET_COMMODITIES,
+                      REPORT_YEAR,
+                      SUM(stored_value * query_value) AS dot_product,
+                      SQRT(SUM(POW(stored_value, 2))) AS stored_magnitude,
+                      SQRT(SUM(POW(query_value, 2))) AS query_magnitude
+                    FROM flattened
+                    GROUP BY ANUMBER, TITLE, OPERATOR, TARGET_COMMODITIES, REPORT_YEAR
+                  )
                 SELECT
-                    ANUMBER,
-                    TITLE,
-                    OPERATOR,
-                    TARGET_COMMODITIES,
-                    REPORT_YEAR,
-                    CASE
-                        WHEN stored_magnitude > 0 AND query_magnitude > 0
-                        THEN dot_product / (stored_magnitude * query_magnitude)
-                        ELSE 0.0
-                    END as similarity_score
-                FROM vector_calculations
-                WHERE similarity_score > 0.1
+                  ANUMBER,
+                  TITLE,
+                  OPERATOR,
+                  TARGET_COMMODITIES,
+                  REPORT_YEAR,
+                  CASE
+                    WHEN stored_magnitude > 0 AND query_magnitude > 0
+                    THEN dot_product / (stored_magnitude * query_magnitude)
+                    ELSE 0.0
+                  END AS similarity_score
+                FROM aggregates
+                WHERE similarity_score >= 0
                 ORDER BY similarity_score DESC
                 LIMIT %s
                 """
