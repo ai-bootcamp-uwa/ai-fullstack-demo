@@ -41,9 +41,9 @@ class VectorStore:
                 logger.error("Snowflake connection failed. Aborting startup.")
                 raise RuntimeError("Snowflake vector storage is required but connection failed!")
 
-            if not self.snowflake_store.create_vector_schema():
-                logger.error("Failed to create Snowflake schema. Aborting startup.")
-                raise RuntimeError("Snowflake vector storage is required but schema creation failed!")
+            # if not self.snowflake_store.create_vector_schema():
+            #     logger.error("Failed to create Snowflake schema. Aborting startup.")
+            #     raise RuntimeError("Snowflake vector storage is required but schema creation failed!")
 
             logger.info("Snowflake vector store initialized successfully")
 
@@ -96,9 +96,9 @@ class VectorStore:
     def _search_snowflake(self, query_vector, top_k=5):
         """Search using Snowflake vector similarity."""
         query_vector_list = np.array(query_vector).tolist()
-        similar_embeddings = self.snowflake_store.similarity_search(
-            query_embedding=query_vector_list,
-            top_k=top_k
+        # Use positional arguments
+        similar_embeddings = self.snowflake_store.search_similar_titles(
+            query_vector_list, top_k
         )
         results = []
         for i, result in enumerate(similar_embeddings):
