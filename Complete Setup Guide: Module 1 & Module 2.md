@@ -186,6 +186,9 @@ python scripts/migrate_to_snowflake.py --setup-only
 ### Step 4: Load Data to Snowflake
 
 ```bash
+
+find data_foundation_project/data/raw -name "temp_filtered_*" -delete
+
 # Option A: Load limited dataset (recommended for testing, skips existing records by default)
 python scripts/migrate_to_snowflake.py --max-records 1000
 python scripts/migrate_to_snowflake.py

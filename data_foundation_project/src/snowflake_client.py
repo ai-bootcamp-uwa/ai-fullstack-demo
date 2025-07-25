@@ -373,9 +373,9 @@ class SnowflakeClient:
                     self.create_tables()
 
             # Clear existing data (since we're doing a fresh load)
-            logger.info("Clearing existing data from GEOLOGICAL_REPORTS table...")
-            with self.get_connection() as conn:
-                conn.execute(text("TRUNCATE TABLE GEOLOGICAL_REPORTS"))
+            # logger.info("Clearing existing data from GEOLOGICAL_REPORTS table...")
+            # with self.get_connection() as conn:
+            #     conn.execute(text("TRUNCATE TABLE GEOLOGICAL_REPORTS"))
 
             # Load data to Snowflake using pandas (with explicit method)
             logger.info("Loading data to Snowflake...")
@@ -434,16 +434,29 @@ class SnowflakeClient:
             logger.info(f"Loading shapefile (append-only): {shapefile_path}")
             import geopandas as gpd
             gdf = gpd.read_file(shapefile_path)
+            # ADD CRS TRANSFORMATION STEP:
+            logger.info("Transforming CRS for Snowflake compatibility...")
+            if gdf.crs and gdf.crs.to_epsg() != 4326:
+                logger.info(f"Converting from {gdf.crs} to WGS84 (EPSG:4326)")
+                gdf = gdf.to_crs(epsg=4326)
+            else:
+                logger.info("CRS is already WGS84 or undefined")
             if max_records is not None:
                 gdf = gdf.head(max_records).copy()
                 logger.info(f"Limiting upload to first {max_records} records.")
-            # Geometry to WKT
+            # Geometry to WKT with validation
             def safe_geometry_to_wkt(geom):
                 if geom is None or pd.isna(geom):
                     return None
                 try:
-                    wkt = geom.wkt
-                    return wkt
+                    # Ensure geometry is valid before converting to WKT
+                    if not geom.is_valid:
+                        from shapely.validation import make_valid
+                        geom = make_valid(geom)
+                    if geom.is_valid:
+                        return geom.wkt
+                    else:
+                        return None
                 except Exception:
                     return None
             gdf['geometry_wkt'] = gdf['geometry'].apply(safe_geometry_to_wkt)

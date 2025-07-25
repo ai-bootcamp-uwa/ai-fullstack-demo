@@ -99,13 +99,34 @@ class SnowflakeMigrationPipeline:
 
         # Look for shapefile in data directory
         data_dir = Path(__file__).parent.parent / 'data' / 'raw'
-        shapefiles = list(data_dir.rglob('*.shp'))
+
+        # CLEAN UP OLD TEMP FILES FIRST:
+        temp_files = list(data_dir.rglob('temp_filtered_*.shp'))
+        for temp_file in temp_files:
+            try:
+                temp_dir = temp_file.parent / temp_file.stem
+                if temp_dir.exists():
+                    import shutil
+                    shutil.rmtree(temp_dir, ignore_errors=True)
+                # Remove all associated temp files (.shp, .shx, .dbf, .prj, .cpg)
+                for ext in ['.shp', '.shx', '.dbf', '.prj', '.cpg']:
+                    temp_file_variant = temp_file.with_suffix(ext)
+                    if temp_file_variant.exists():
+                        temp_file_variant.unlink(missing_ok=True)
+                logger.info(f"Cleaned up old temp file: {temp_file.name}")
+            except Exception as e:
+                logger.debug(f"Temp file cleanup warning: {e}")
+
+        # Find original shapefiles only (exclude temp files)
+        shapefiles = [f for f in data_dir.rglob('*.shp')
+                      if not f.name.startswith('temp_filtered_')]
 
         if not shapefiles:
             raise FileNotFoundError(f"No .shp files found in {data_dir}")
 
         if len(shapefiles) > 1:
-            logger.warning(f"Multiple shapefiles found, using: {shapefiles[0]}")
+            logger.warning(f"Multiple shapefiles found: {[f.name for f in shapefiles]}")
+            logger.warning(f"Using: {shapefiles[0]}")
 
         return shapefiles[0]
 
@@ -239,11 +260,23 @@ class SnowflakeMigrationPipeline:
         temp_shapefile = shapefile_path.parent / f"temp_filtered_{shapefile_path.name}"
         gdf_filtered.to_file(temp_shapefile)
         try:
-            records_loaded = snowflake_client.load_shapefile_data(str(temp_shapefile))
+            records_loaded = snowflake_client.load_shapefile_data_append_only(str(temp_shapefile), max_records=self.max_records)
             return records_loaded
         finally:
-            import shutil
-            shutil.rmtree(temp_shapefile.parent / temp_shapefile.stem, ignore_errors=True)
+            # Clean up temp shapefile and its directory
+            try:
+                import shutil
+                temp_dir = temp_shapefile.parent / temp_shapefile.stem
+                if temp_dir.exists():
+                    shutil.rmtree(temp_dir, ignore_errors=True)
+                # Also remove the shapefile itself and associated files
+                for ext in ['.shp', '.shx', '.dbf', '.prj', '.cpg']:
+                    temp_file = temp_shapefile.with_suffix(ext)
+                    if temp_file.exists():
+                        temp_file.unlink(missing_ok=True)
+                logger.debug(f"Cleaned up temp files: {temp_shapefile.stem}.*")
+            except Exception as e:
+                logger.debug(f"Cleanup warning: {e}")
 
     def migrate_data(self, shapefile_path: Path, conflict_resolution: str = 'skip') -> bool:
         """Migrate data from shapefile to Snowflake with conflict handling"""
