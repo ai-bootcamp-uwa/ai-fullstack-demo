@@ -5,6 +5,13 @@
 /data_foundation_project/data/raw/
 /data_foundation_project/data/processed/
 
+# Ignore all data files in the snowflake_streamlit project
+/snowflake_streamlit/data/raw/
+/snowflake_streamlit/data/processed/
+
+# Ignore Snowflake configuration files (contains credentials)
+/snowflake_streamlit/config/snowflake_config.yaml
+
 # Ignore shapefile and related large geospatial files everywhere
 *.shp
 *.dbf

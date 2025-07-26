@@ -1,0 +1,12 @@
+# Snowflake Connector
+snowflake-connector-python==3.6.0
+
+# Configuration
+PyYAML==6.0.1
+
+# Data Processing
+pandas==2.1.4
+geopandas==0.14.1
+
+# Development
+python-dotenv==1.0.0 
